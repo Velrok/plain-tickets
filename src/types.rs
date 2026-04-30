@@ -144,3 +144,36 @@ pub struct FrontMatter {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+pub struct Ticket {
+    pub front_matter: FrontMatter,
+    pub body: String,
+}
+
+impl std::str::FromStr for Ticket {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.strip_prefix("---\n").unwrap_or(s);
+        let end = s
+            .find("\n---\n")
+            .ok_or_else(|| "missing front matter closing delimiter".to_string())?;
+        let yaml = &s[..end];
+        let body = s[end + 5..].trim_start_matches('\n').to_string();
+        let front_matter: FrontMatter = serde_yaml::from_str(yaml)
+            .map_err(|e| format!("invalid front matter: {e}"))?;
+        Ok(Ticket { front_matter, body })
+    }
+}
+
+impl std::fmt::Display for Ticket {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let yaml = serde_yaml::to_string(&self.front_matter)
+            .expect("FrontMatter serialisation is infallible");
+        if self.body.is_empty() {
+            write!(f, "---\n{}---\n", yaml)
+        } else {
+            write!(f, "---\n{}---\n\n{}", yaml, self.body)
+        }
+    }
+}

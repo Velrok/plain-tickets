@@ -4,7 +4,7 @@ use std::process;
 
 use chrono::Utc;
 
-use crate::types::{FrontMatter, Tag, TicketId, TicketStatus, TicketType, Title};
+use crate::types::{FrontMatter, Tag, Ticket, TicketId, TicketStatus, TicketType, Title};
 
 pub fn resolve_dir() -> PathBuf {
     std::env::var("TICKETS_DIR")
@@ -52,32 +52,94 @@ pub fn cmd_new(
     let filename = format!("{}_{}.md", id, slug);
     let path = all_dir.join(&filename);
 
-    let yaml = serde_yaml::to_string(&front_matter).unwrap_or_else(|e| {
-        eprintln!("error: could not serialise front matter: {}", e);
-        process::exit(1);
-    });
-
-    let body_text = match body.as_deref() {
+    let body = match body.as_deref() {
         None => String::new(),
-        Some("-") => {
-            let mut buf = String::new();
-            std::io::stdin().read_to_string(&mut buf).unwrap_or_else(|e| {
-                eprintln!("error: could not read from STDIN: {}", e);
-                process::exit(1);
-            });
-            format!("\n{}", buf)
-        }
-        Some(text) => format!("\n{}\n", text),
+        Some("-") => read_body_from_stdin(),
+        Some(text) => text.to_string(),
     };
+    let ticket = Ticket { front_matter, body };
 
-    let content = format!("---\n{}---\n{}", yaml, body_text);
-
-    std::fs::write(&path, &content).unwrap_or_else(|e| {
+    std::fs::write(&path, ticket.to_string()).unwrap_or_else(|e| {
         eprintln!("error: could not write {}: {}", path.display(), e);
         process::exit(1);
     });
 
     println!("{} {}", id, filename);
+}
+
+pub fn cmd_edit(
+    dir: PathBuf,
+    id: TicketId,
+    title: Option<Title>,
+    ticket_type: Option<TicketType>,
+    status: Option<TicketStatus>,
+    tags: Vec<Tag>,
+    parent: Option<TicketId>,
+    blocked_by: Vec<TicketId>,
+    body: Option<String>,
+    clear_parent: bool,
+    clear_blocked_by: bool,
+) {
+    let all_dir = dir.join("all");
+    let path = find_ticket(&all_dir, &id);
+
+    let raw = std::fs::read_to_string(&path).unwrap_or_else(|e| {
+        eprintln!("error: could not read {}: {}", path.display(), e);
+        process::exit(1);
+    });
+
+    let mut ticket: Ticket = raw.parse().unwrap_or_else(|e| {
+        eprintln!("error: could not parse {}: {}", path.display(), e);
+        process::exit(1);
+    });
+
+    let fm = &mut ticket.front_matter;
+    if let Some(t) = title { fm.title = t; }
+    if let Some(t) = ticket_type { fm.r#type = t; }
+    if let Some(s) = status { fm.status = s; }
+    if !tags.is_empty() { fm.tags = tags; }
+    if clear_parent { fm.parent = None; } else if parent.is_some() { fm.parent = parent; }
+    if clear_blocked_by { fm.blocked_by = vec![]; } else if !blocked_by.is_empty() { fm.blocked_by = blocked_by; }
+    fm.updated_at = Utc::now();
+
+    if let Some(b) = body {
+        ticket.body = match b.as_str() {
+            "-" => read_body_from_stdin(),
+            _ => b,
+        };
+    }
+
+    std::fs::write(&path, ticket.to_string()).unwrap_or_else(|e| {
+        eprintln!("error: could not write {}: {}", path.display(), e);
+        process::exit(1);
+    });
+
+    println!("updated {}", path.file_name().unwrap().to_string_lossy());
+}
+
+fn find_ticket(dir: &Path, id: &TicketId) -> PathBuf {
+    let prefix = format!("{}_", id);
+    let entries = std::fs::read_dir(dir).unwrap_or_else(|e| {
+        eprintln!("error: could not read directory {}: {}", dir.display(), e);
+        process::exit(1);
+    });
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if name.to_string_lossy().starts_with(&prefix) {
+            return entry.path();
+        }
+    }
+    eprintln!("error: no ticket found with id {}", id);
+    process::exit(1);
+}
+
+fn read_body_from_stdin() -> String {
+    let mut buf = String::new();
+    std::io::stdin().read_to_string(&mut buf).unwrap_or_else(|e| {
+        eprintln!("error: could not read from STDIN: {}", e);
+        process::exit(1);
+    });
+    buf
 }
 
 fn init_directories(dir: &Path) {

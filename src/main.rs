@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 mod commands;
 mod types;
 
-use commands::{cmd_init, cmd_new, resolve_dir};
+use commands::{cmd_edit, cmd_init, cmd_new, resolve_dir};
 use types::{Tag, TicketId, TicketStatus, TicketType, Title};
 
 #[derive(Parser)]
@@ -17,6 +17,38 @@ struct Cli {
 enum Commands {
     /// Initialise tickets directory
     Init,
+    /// Edit an existing ticket
+    Edit {
+        /// Ticket id
+        id: TicketId,
+        /// New title
+        #[arg(long)]
+        title: Option<Title>,
+        /// New type
+        #[arg(long)]
+        r#type: Option<TicketType>,
+        /// New status
+        #[arg(long)]
+        status: Option<TicketStatus>,
+        /// Replace tags (repeatable)
+        #[arg(long)]
+        tag: Vec<Tag>,
+        /// Set parent ticket id
+        #[arg(long)]
+        parent: Option<TicketId>,
+        /// Clear parent
+        #[arg(long)]
+        clear_parent: bool,
+        /// Set blocked-by ticket ids (repeatable)
+        #[arg(long)]
+        blocked_by: Vec<TicketId>,
+        /// Clear blocked-by list
+        #[arg(long)]
+        clear_blocked_by: bool,
+        /// Body text; use `-` to read from STDIN
+        #[arg(long)]
+        body: Option<String>,
+    },
     /// Create a new ticket
     New {
         /// Ticket title (required, max 120 chars)
@@ -49,6 +81,18 @@ fn main() {
 
     match cli.command {
         Commands::Init => cmd_init(dir),
+        Commands::Edit {
+            id,
+            title,
+            r#type,
+            status,
+            tag,
+            parent,
+            clear_parent,
+            blocked_by,
+            clear_blocked_by,
+            body,
+        } => cmd_edit(dir, id, title, r#type, status, tag, parent, blocked_by, body, clear_parent, clear_blocked_by),
         Commands::New {
             title,
             r#type,
