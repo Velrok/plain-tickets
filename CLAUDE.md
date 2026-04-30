@@ -31,6 +31,11 @@ tickets/
 
 ## Architecture
 
+**Modules:**
+- `src/main.rs` — `Cli`, `Commands` (clap structs), `main()`
+- `src/types.rs` — domain newtypes (`TicketId`, `Title`, `Tag`), enums (`TicketType`, `TicketStatus`), `FrontMatter`
+- `src/commands.rs` — `resolve_dir`, `cmd_init`, `cmd_new`
+
 **Key types:**
 - `FrontMatter` — serde struct for YAML front matter (id, title, type, status, tags, parent, blocked_by, created_at, updated_at)
 - `TicketId`, `Title`, `Tag` — newtype wrappers with `FromStr` validation (used as clap value parsers)

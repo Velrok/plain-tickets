@@ -93,6 +93,14 @@ Ticket files follow `<id>_<slug>.md` — e.g. `a3f9c1_fix-login-bug.md`.
 
 ## File Layout
 
-Everything lives in `src/main.rs` until the file warrants splitting. When
-splitting, prefer grouping by domain concept (e.g. `types.rs`, `commands/`)
-over grouping by layer.
+Group by domain concept, not by layer.
+
+Current layout:
+
+| File | Contents |
+|------|----------|
+| `src/main.rs` | `Cli`, `Commands` (clap structs), `main()` |
+| `src/types.rs` | Domain newtypes (`TicketId`, `Title`, `Tag`), enums (`TicketType`, `TicketStatus`), `FrontMatter` |
+| `src/commands.rs` | `resolve_dir`, `cmd_init`, `cmd_new`, `init_directories` |
+
+When `commands.rs` grows, split into `src/commands/` with one file per subcommand (e.g. `src/commands/new.rs`).
