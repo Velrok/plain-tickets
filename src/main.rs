@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process;
 
 #[derive(Parser)]
@@ -22,7 +22,7 @@ fn resolve_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("tickets"))
 }
 
-fn init_directories(dir: &PathBuf) {
+fn init_directories(dir: &Path) {
     let all = dir.join("all");
     let archived = dir.join("archived");
 
