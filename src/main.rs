@@ -10,7 +10,7 @@ struct Cli {
     dir: Option<PathBuf>,
 
     #[command(subcommand)]
-    command: Option<Commands>,
+    command: Commands,
 }
 
 #[derive(Subcommand)]
@@ -25,7 +25,7 @@ fn resolve_dir(cli_dir: Option<PathBuf>) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("tickets"))
 }
 
-fn cmd_init(dir: PathBuf) {
+fn init_directories(dir: &PathBuf) {
     let all = dir.join("all");
     let archived = dir.join("archived");
 
@@ -40,35 +40,10 @@ fn cmd_init(dir: PathBuf) {
             println!("  created {}", path.display());
         }
     }
+}
 
-    let git_dir = dir.join(".git");
-    if git_dir.exists() {
-        println!("  git     already initialised");
-    } else {
-        print!("  git     no .git found — initialise git repo? [y/N] ");
-        use std::io::{self, Write};
-        io::stdout().flush().ok();
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).ok();
-        if input.trim().eq_ignore_ascii_case("y") {
-            let status = process::Command::new("git")
-                .args(["init", dir.to_str().unwrap_or(".")])
-                .status();
-            match status {
-                Ok(s) if s.success() => println!("  git     initialised"),
-                Ok(s) => {
-                    eprintln!("error: git init exited with {}", s);
-                    process::exit(1);
-                }
-                Err(e) => {
-                    eprintln!("error: could not run git: {}", e);
-                    process::exit(1);
-                }
-            }
-        } else {
-            println!("  git     skipped");
-        }
-    }
+fn cmd_init(dir: PathBuf) {
+    init_directories(&dir);
 }
 
 fn main() {
@@ -76,6 +51,6 @@ fn main() {
     let dir = resolve_dir(cli.dir);
 
     match cli.command {
-        Some(Commands::Init) | None => cmd_init(dir),
+        Commands::Init => cmd_init(dir),
     }
 }
