@@ -56,7 +56,7 @@ Solo developer. No team/multi-user support.
 
 ### Filename Format
 
-`<6-char-nanoid>-<slugified-title>.md` — e.g. `a3f9c1-fix-login-bug.md`
+`<6-char-nanoid>_<slugified-title>.md` — e.g. `a3f9c1_fix-login-bug.md`
 
 **Future:** show minimal unique id prefix (à la Jujutsu) for brevity in CLI output.
 
