@@ -1,3 +1,4 @@
+use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -24,6 +25,7 @@ pub fn cmd_new(
     tags: Vec<Tag>,
     parent: Option<TicketId>,
     blocked_by: Vec<TicketId>,
+    body: Option<String>,
 ) {
     let all_dir = dir.join("all");
     if !all_dir.exists() {
@@ -55,7 +57,20 @@ pub fn cmd_new(
         process::exit(1);
     });
 
-    let content = format!("---\n{}---\n", yaml);
+    let body_text = match body.as_deref() {
+        None => String::new(),
+        Some("-") => {
+            let mut buf = String::new();
+            std::io::stdin().read_to_string(&mut buf).unwrap_or_else(|e| {
+                eprintln!("error: could not read from STDIN: {}", e);
+                process::exit(1);
+            });
+            format!("\n{}", buf)
+        }
+        Some(text) => format!("\n{}\n", text),
+    };
+
+    let content = format!("---\n{}---\n{}", yaml, body_text);
 
     std::fs::write(&path, &content).unwrap_or_else(|e| {
         eprintln!("error: could not write {}: {}", path.display(), e);

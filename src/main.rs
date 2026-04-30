@@ -37,6 +37,9 @@ enum Commands {
         /// Initial status (default: draft)
         #[arg(long, default_value = "draft")]
         status: TicketStatus,
+        /// Body text; use `-` to read from STDIN
+        #[arg(long)]
+        body: Option<String>,
     },
 }
 
@@ -53,6 +56,7 @@ fn main() {
             tag,
             parent,
             blocked_by,
-        } => cmd_new(dir, title, r#type, status, tag, parent, blocked_by),
+            body,
+        } => cmd_new(dir, title, r#type, status, tag, parent, blocked_by, body),
     }
 }
