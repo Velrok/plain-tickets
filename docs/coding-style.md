@@ -17,7 +17,7 @@ Current wrappers:
 | Type | Inner | Constraints |
 |------|-------|-------------|
 | `TicketId` | `String` | No validation — any non-empty string |
-| `Title` | `String` | Trimmed, non-empty, max 120 chars |
+| `Title` | `String` | Trimmed, non-empty, max 120 chars, only letters/digits/spaces/`_`/`-`/`.` |
 | `Tag` | `String` | Non-empty, letters/digits/`_`/`-` only |
 
 **Pattern for a new wrapper:**
@@ -45,7 +45,8 @@ impl std::fmt::Display for MyType {
 - `FromStr` doubles as the clap value parser — validation happens at CLI parse
   time, before any command logic runs.
 - `Display` is the canonical way to get the string back out; avoid reaching
-  into `.0` outside the type's own `impl` blocks.
+  into `.0` outside the type's own `impl` blocks. Exception: domain methods on
+  the type itself (e.g. `Title::slugify`) may access `.0` internally.
 
 ### Enums for closed sets
 
@@ -72,6 +73,15 @@ enum TicketType { Epic, Story, #[default] Task, Bug }
 - `cmd_<name>` takes typed arguments — no raw `String` for domain values
 - Destructure the command enum in `main` and pass fields positionally to
   `cmd_<name>`
+
+## Filename Format
+
+Ticket files follow `<id>_<slug>.md` — e.g. `a3f9c1_fix-login-bug.md`.
+
+- `_` separates the id from the slug (easy to split on the first `_`)
+- `-` separates words within the slug
+- Slug is derived from `Title::slugify()`: lowercased, non-alphanumeric chars
+  replaced with `-`, consecutive `-` collapsed
 
 ## Serialisation
 
