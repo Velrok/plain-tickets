@@ -5,10 +5,6 @@ use std::process;
 #[derive(Parser)]
 #[command(name = "tickets", about = "Plain markdown ticket system")]
 struct Cli {
-    /// Data directory (overrides TICKETS_DIR env var)
-    #[arg(long, global = true)]
-    dir: Option<PathBuf>,
-
     #[command(subcommand)]
     command: Commands,
 }
@@ -19,9 +15,10 @@ enum Commands {
     Init,
 }
 
-fn resolve_dir(cli_dir: Option<PathBuf>) -> PathBuf {
-    cli_dir
-        .or_else(|| std::env::var("TICKETS_DIR").ok().map(PathBuf::from))
+fn resolve_dir() -> PathBuf {
+    std::env::var("TICKETS_DIR")
+        .ok()
+        .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("tickets"))
 }
 
@@ -48,7 +45,7 @@ fn cmd_init(dir: PathBuf) {
 
 fn main() {
     let cli = Cli::parse();
-    let dir = resolve_dir(cli.dir);
+    let dir = resolve_dir();
 
     match cli.command {
         Commands::Init => cmd_init(dir),
