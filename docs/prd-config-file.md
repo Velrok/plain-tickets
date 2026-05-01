@@ -46,9 +46,13 @@ Introduce a TOML config file at `tickets/.tickets.toml`. It travels with the tic
   - `tickets: edit <id> "<title>"`
 - Uses the existing `git config user.name` / `user.email` identity
 
-### `auto_commit = true` — no `.git` detected
-- **Hard error** — fail the command with a clear message
-- Rationale: the user explicitly opted into versioning; silently skipping would be confusing
+### `auto_commit = true` — error cases
+Both are hard errors — the user explicitly opted into versioning; silently skipping would be confusing.
+
+- **`git` not on PATH** — `error: auto_commit is enabled but git was not found on PATH`
+- **No git repository detected** — `error: auto_commit is enabled but the tickets directory is not inside a git repository`
+
+Detection uses `git -C <tickets_dir> rev-parse --git-dir` (shells out; no `.git` walk in code).
 
 ---
 
