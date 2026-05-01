@@ -104,3 +104,29 @@ Current layout:
 | `src/commands.rs` | `resolve_dir`, `cmd_init`, `cmd_new`, `init_directories` |
 
 When `commands.rs` grows, split into `src/commands/` with one file per subcommand (e.g. `src/commands/new.rs`).
+
+## Testing
+
+Two tiers — keep them separate:
+
+### Unit tests (`#[cfg(test)]` in `src/`)
+
+- Live in the same file as the code they test, inside a `mod tests` block
+- Test pure logic: `FromStr` validation, `Display`, helper methods (e.g. `Title::slugify`)
+- No filesystem, no process spawning
+- Run with `cargo test --bin tickets`
+
+### E2E / CLI tests (`tests/`)
+
+- One file per subcommand: `tests/cli_init.rs`, `tests/cli_new.rs`, `tests/cli_edit.rs`
+- Shared helpers in `tests/common/mod.rs` (`test_dir`, `tickets`, `create_ticket`)
+- Each test gets an isolated directory under `.testing/<test-name>/` via the `TICKETS_DIR` env var
+- Invoke the real binary via `std::process::Command` — test CLI behaviour end-to-end
+- Input validation tests live in `tests/cli_validation.rs`
+- Run with `cargo test` (all) or `cargo test --test cli_<name>` (one file)
+
+### Conventions
+
+- Test names describe the behaviour, not the implementation: `title_empty_is_err`, not `test_from_str_1`
+- Each test is self-contained — no shared mutable state between tests
+- `.testing/` is git-ignored; leave artefacts on disk for post-failure inspection
