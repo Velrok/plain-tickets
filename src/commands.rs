@@ -2,7 +2,7 @@ use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::process;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 
 use crate::config::Config;
 use crate::git;
@@ -114,6 +114,92 @@ pub fn cmd_new(
     }
 
     println!("{} {}", id, filename);
+}
+
+pub fn cmd_show(dir: PathBuf, id: TicketId) {
+    let all_dir = dir.join("all");
+    if !all_dir.exists() {
+        eprintln!("error: tickets directory not initialised — run `tickets init` first");
+        process::exit(1);
+    }
+    let path = find_ticket(&all_dir, &id);
+    let raw = std::fs::read_to_string(&path).unwrap_or_else(|e| {
+        eprintln!("error: could not read {}: {}", path.display(), e);
+        process::exit(1);
+    });
+    let ticket: Ticket = raw.parse().unwrap_or_else(|e| {
+        eprintln!("error: could not parse {}: {}", path.display(), e);
+        process::exit(1);
+    });
+    print_ticket(&ticket);
+}
+
+fn relative_time(dt: DateTime<Utc>) -> String {
+    let secs = (Utc::now() - dt).num_seconds().max(0);
+    if secs < 60 { return "just now".to_string(); }
+    let mins = secs / 60;
+    if mins < 60 { return format!("{mins} minute{} ago", if mins == 1 { "" } else { "s" }); }
+    let hours = mins / 60;
+    if hours < 24 { return format!("{hours} hour{} ago", if hours == 1 { "" } else { "s" }); }
+    let days = hours / 24;
+    if days < 30 { return format!("{days} day{} ago", if days == 1 { "" } else { "s" }); }
+    let months = days / 30;
+    if months < 12 { return format!("{months} month{} ago", if months == 1 { "" } else { "s" }); }
+    let years = months / 12;
+    format!("{years} year{} ago", if years == 1 { "" } else { "s" })
+}
+
+fn fmt_timestamp(dt: DateTime<Utc>) -> String {
+    format!("{} · {}", dt.format("%Y-%m-%d"), relative_time(dt))
+}
+
+fn print_ticket(ticket: &Ticket) {
+    let fm = &ticket.front_matter;
+    println!("🎫  {}", fm.title);
+    println!("📌  {}", fm.status);
+    println!("🏷   {}", fm.r#type);
+    if !fm.tags.is_empty() {
+        let tags: Vec<String> = fm.tags.iter().map(|t| t.to_string()).collect();
+        println!("🔖  {}", tags.join(", "));
+    }
+    if let Some(ref p) = fm.parent {
+        println!("⬆️   {}", p);
+    }
+    if !fm.blocked_by.is_empty() {
+        let ids: Vec<String> = fm.blocked_by.iter().map(|t| t.to_string()).collect();
+        println!("🚫  {}", ids.join(", "));
+    }
+    println!("📅  created   {}", fmt_timestamp(fm.created_at));
+    println!("✏️   updated   {}", fmt_timestamp(fm.updated_at));
+    if !ticket.body.is_empty() {
+        println!();
+        print_body(&ticket.body);
+    }
+}
+
+fn print_body(body: &str) {
+    let bat_ok = std::process::Command::new("bat")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if bat_ok {
+        let mut child = std::process::Command::new("bat")
+            .args(["--language=md", "--style=plain", "--color=always", "-"])
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .unwrap_or_else(|e| {
+                eprintln!("error: could not spawn bat: {e}");
+                process::exit(1);
+            });
+        use std::io::Write as _;
+        if let Some(stdin) = child.stdin.as_mut() {
+            let _ = stdin.write_all(body.as_bytes());
+        }
+        let _ = child.wait();
+    } else {
+        print!("{}", body);
+    }
 }
 
 pub fn cmd_list(dir: PathBuf, _cfg: &Config) {

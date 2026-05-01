@@ -7,7 +7,7 @@ mod config;
 mod git;
 mod types;
 
-use commands::{cmd_archive, cmd_edit, cmd_init, cmd_list, cmd_new, resolve_dir};
+use commands::{cmd_archive, cmd_edit, cmd_init, cmd_list, cmd_new, cmd_show, resolve_dir};
 use types::{Tag, TicketId, TicketStatus, TicketType, Title};
 
 #[derive(Parser)]
@@ -34,6 +34,11 @@ enum Commands {
     Init,
     /// List all active tickets
     List,
+    /// Show a single ticket
+    Show {
+        /// Ticket ID
+        id: TicketId,
+    },
     /// Edit an existing ticket
     Edit {
         /// Ticket id
@@ -120,6 +125,7 @@ fn main() {
             clear_blocked_by,
             body,
         } => cmd_edit(dir, &cfg, id, title, r#type, status, tag, parent, blocked_by, body, clear_parent, clear_blocked_by),
+        Commands::Show { id } => cmd_show(dir, id),
         Commands::New {
             title,
             r#type,
