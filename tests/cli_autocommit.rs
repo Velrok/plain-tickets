@@ -1,7 +1,19 @@
 mod common;
 
 use std::fs;
+use std::path::Path;
 use std::process::Command;
+
+/// Like `common::tickets` but sets `current_dir` to `dir` so the binary's
+/// `Path::new(".")` resolves to the test git repo, not the project root.
+fn tickets(dir: &Path, args: &[&str]) -> std::process::Output {
+    Command::new(common::bin())
+        .args(args)
+        .env("TICKETS_DIR", dir)
+        .current_dir(dir)
+        .output()
+        .expect("failed to run tickets binary")
+}
 
 fn init_git_repo(dir: &std::path::Path) {
     Command::new("git").args(["init"]).current_dir(dir).status().unwrap();
@@ -38,10 +50,10 @@ fn enable_auto_commit(dir: &std::path::Path) {
 fn new_auto_commits_when_enabled() {
     let dir = common::test_dir("autocommit_new_enabled");
     init_git_repo(&dir);
-    common::tickets(&dir, &["init"]);
+    tickets(&dir, &["init"]);
     enable_auto_commit(&dir);
 
-    let out = common::tickets(&dir, &["new", "--title", "Test ticket"]);
+    let out = tickets(&dir, &["new", "--title", "Test ticket"]);
     assert!(out.status.success(), "new failed: {:?}", out);
     assert_eq!(git_log_count(&dir), 1, "expected 1 commit after new");
 
@@ -59,10 +71,10 @@ fn new_auto_commits_when_enabled() {
 fn new_no_commit_when_disabled() {
     let dir = common::test_dir("autocommit_new_disabled");
     init_git_repo(&dir);
-    common::tickets(&dir, &["init"]);
+    tickets(&dir, &["init"]);
     // .tickets.toml left with default (auto_commit = false)
 
-    let out = common::tickets(&dir, &["new", "--title", "Silent ticket"]);
+    let out = tickets(&dir, &["new", "--title", "Silent ticket"]);
     assert!(out.status.success(), "new failed: {:?}", out);
     assert_eq!(git_log_count(&dir), 0, "expected no commits when auto_commit = false");
 }
@@ -71,17 +83,17 @@ fn new_no_commit_when_disabled() {
 fn edit_auto_commits_when_enabled() {
     let dir = common::test_dir("autocommit_edit_enabled");
     init_git_repo(&dir);
-    common::tickets(&dir, &["init"]);
+    tickets(&dir, &["init"]);
     enable_auto_commit(&dir);
 
     // new auto-commits the file; now edit it
-    let new_out = common::tickets(&dir, &["new", "--title", "Edit me"]);
+    let new_out = tickets(&dir, &["new", "--title", "Edit me"]);
     assert!(new_out.status.success());
     let stdout = String::from_utf8_lossy(&new_out.stdout);
     let last_line = stdout.trim().lines().last().unwrap();
     let id = last_line.split_whitespace().next().unwrap().to_string();
 
-    let edit_out = common::tickets(&dir, &["edit", &id, "--status", "todo"]);
+    let edit_out = tickets(&dir, &["edit", &id, "--status", "todo"]);
     assert!(edit_out.status.success(), "edit failed: {:?}", edit_out);
     assert_eq!(git_log_count(&dir), 2, "expected 2 commits (new + edit)");
 
@@ -98,19 +110,65 @@ fn edit_auto_commits_when_enabled() {
 fn archive_auto_commits_when_enabled() {
     let dir = common::test_dir("autocommit_archive_enabled");
     init_git_repo(&dir);
-    common::tickets(&dir, &["init"]);
+    tickets(&dir, &["init"]);
     enable_auto_commit(&dir);
 
     // new auto-commits; then archive
-    let new_out = common::tickets(&dir, &["new", "--title", "Archive me"]);
+    let new_out = tickets(&dir, &["new", "--title", "Archive me"]);
     assert!(new_out.status.success());
     let stdout = String::from_utf8_lossy(&new_out.stdout);
     let id = stdout.trim().lines().last().unwrap().split_whitespace().next().unwrap().to_string();
 
-    let arc_out = common::tickets(&dir, &["archive", &id]);
+    let arc_out = tickets(&dir, &["archive", &id]);
     assert!(arc_out.status.success(), "archive failed: {:?}", arc_out);
     assert_eq!(git_log_count(&dir), 2, "expected 2 commits (new + archive)");
 
     let msg = git_log_last(&dir);
     assert!(msg.contains("tickets: archive"), "unexpected commit message: {msg}");
+}
+
+fn git_is_clean(dir: &std::path::Path) -> bool {
+    let out = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).trim().is_empty()
+}
+
+#[test]
+fn archive_by_id_auto_commit_leaves_clean_working_tree() {
+    // Regression: archive committed only the dst (archived/) file but not the
+    // deletion of the src (all/) file, leaving it as an unstaged deletion.
+    let dir = common::test_dir("autocommit_archive_clean_tree");
+    init_git_repo(&dir);
+    tickets(&dir, &["init"]);
+    enable_auto_commit(&dir);
+
+    let new_out = tickets(&dir, &["new", "--title", "Clean tree"]);
+    assert!(new_out.status.success(), "new failed: {}", String::from_utf8_lossy(&new_out.stderr));
+    let stdout = String::from_utf8_lossy(&new_out.stdout);
+    let id = stdout.trim().lines().last().unwrap().split_whitespace().next().unwrap().to_string();
+
+    let arc_out = tickets(&dir, &["archive", &id]);
+    assert!(arc_out.status.success(), "archive failed: {:?}", arc_out);
+
+    assert!(git_is_clean(&dir), "working tree is dirty after archive — deletion of all/ file was not committed");
+}
+
+#[test]
+fn archive_all_rejected_auto_commit_leaves_clean_working_tree() {
+    // Same regression for the --all-rejected path.
+    let dir = common::test_dir("autocommit_archive_rejected_clean_tree");
+    init_git_repo(&dir);
+    tickets(&dir, &["init"]);
+    enable_auto_commit(&dir);
+
+    let new_out = tickets(&dir, &["new", "--title", "Reject me", "--status", "rejected"]);
+    assert!(new_out.status.success());
+
+    let arc_out = tickets(&dir, &["archive", "--all-rejected"]);
+    assert!(arc_out.status.success(), "archive --all-rejected failed: {:?}", arc_out);
+
+    assert!(git_is_clean(&dir), "working tree is dirty after --all-rejected archive — deletion of all/ file was not committed");
 }
