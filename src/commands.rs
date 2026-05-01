@@ -6,10 +6,8 @@ use chrono::Utc;
 
 use crate::types::{FrontMatter, Tag, Ticket, TicketId, TicketStatus, TicketType, Title};
 
-pub fn resolve_dir() -> PathBuf {
-    std::env::var("TICKETS_DIR")
-        .ok()
-        .map(PathBuf::from)
+pub fn resolve_dir(flag: Option<PathBuf>) -> PathBuf {
+    flag.or_else(|| std::env::var("TICKETS_DIR").ok().map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("tickets"))
 }
 

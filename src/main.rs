@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand};
 
 mod commands;
@@ -9,6 +11,9 @@ use types::{Tag, TicketId, TicketStatus, TicketType, Title};
 #[derive(Parser)]
 #[command(name = "tickets", about = "Plain markdown ticket system")]
 struct Cli {
+    /// Override the tickets directory (takes precedence over TICKETS_DIR)
+    #[arg(long, global = true)]
+    dir: Option<PathBuf>,
     #[command(subcommand)]
     command: Commands,
 }
@@ -77,7 +82,7 @@ enum Commands {
 
 fn main() {
     let cli = Cli::parse();
-    let dir = resolve_dir();
+    let dir = resolve_dir(cli.dir);
 
     match cli.command {
         Commands::Init => cmd_init(dir),
