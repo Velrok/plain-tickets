@@ -132,6 +132,152 @@ impl std::fmt::Display for Tag {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Title::from_str ───────────────────────────────────────────────────────
+
+    #[test]
+    fn title_valid() {
+        let t: Title = "Fix login bug".parse().unwrap();
+        assert_eq!(t.to_string(), "Fix login bug");
+    }
+
+    #[test]
+    fn title_trims_whitespace() {
+        let t: Title = "  hello world  ".parse().unwrap();
+        assert_eq!(t.to_string(), "hello world");
+    }
+
+    #[test]
+    fn title_empty_is_err() {
+        assert!("".parse::<Title>().is_err());
+        assert!("   ".parse::<Title>().is_err());
+    }
+
+    #[test]
+    fn title_invalid_chars_is_err() {
+        assert!("foo!".parse::<Title>().is_err());
+        assert!("foo@bar".parse::<Title>().is_err());
+        assert!("foo/bar".parse::<Title>().is_err());
+    }
+
+    #[test]
+    fn title_allowed_special_chars() {
+        assert!("fix_login-bug.v2".parse::<Title>().is_ok());
+    }
+
+    #[test]
+    fn title_over_120_chars_is_err() {
+        let long = "a".repeat(121);
+        assert!(long.parse::<Title>().is_err());
+    }
+
+    #[test]
+    fn title_exactly_120_chars_is_ok() {
+        let exactly = "a".repeat(120);
+        assert!(exactly.parse::<Title>().is_ok());
+    }
+
+    // ── Title::slugify ────────────────────────────────────────────────────────
+
+    #[test]
+    fn slugify_lowercases() {
+        let t: Title = "Fix Login Bug".parse().unwrap();
+        assert_eq!(t.slugify(), "fix-login-bug");
+    }
+
+    #[test]
+    fn slugify_replaces_spaces_with_dashes() {
+        let t: Title = "hello world".parse().unwrap();
+        assert_eq!(t.slugify(), "hello-world");
+    }
+
+    #[test]
+    fn slugify_collapses_consecutive_separators() {
+        let t: Title = "foo - bar".parse().unwrap();
+        assert_eq!(t.slugify(), "foo-bar");
+    }
+
+    #[test]
+    fn slugify_handles_underscores_and_dots() {
+        let t: Title = "foo_bar.baz".parse().unwrap();
+        assert_eq!(t.slugify(), "foo-bar-baz");
+    }
+
+    // ── Ticket parse / display ────────────────────────────────────────────────
+
+    fn minimal_ticket_str() -> &'static str {
+        "---\nid: abc123\ntitle: My ticket\ntype: task\nstatus: draft\ntags: []\nparent: null\nblocked_by: []\ncreated_at: 2024-01-01T00:00:00Z\nupdated_at: 2024-01-01T00:00:00Z\n---\n"
+    }
+
+    #[test]
+    fn ticket_parses_without_body() {
+        let t: Ticket = minimal_ticket_str().parse().unwrap();
+        assert_eq!(t.front_matter.title.to_string(), "My ticket");
+        assert!(t.body.is_empty());
+    }
+
+    #[test]
+    fn ticket_parses_with_body() {
+        let s = format!("{}\nSome body text.", minimal_ticket_str());
+        let t: Ticket = s.parse().unwrap();
+        assert_eq!(t.body, "Some body text.");
+    }
+
+    #[test]
+    fn ticket_display_round_trips() {
+        let original = minimal_ticket_str();
+        let t: Ticket = original.parse().unwrap();
+        assert_eq!(t.to_string(), original);
+    }
+
+    #[test]
+    fn ticket_display_round_trips_with_body() {
+        let s = format!("{}\nSome body text.", minimal_ticket_str());
+        let t: Ticket = s.parse().unwrap();
+        assert_eq!(t.to_string(), s);
+    }
+
+    #[test]
+    fn ticket_missing_closing_delimiter_is_err() {
+        let bad = "---\nid: abc123\ntitle: My ticket\n";
+        assert!(bad.parse::<Ticket>().is_err());
+    }
+
+    #[test]
+    fn ticket_malformed_yaml_is_err() {
+        let bad = "---\nnot: valid: yaml: here:\n---\n";
+        assert!(bad.parse::<Ticket>().is_err());
+    }
+
+    // ── Tag::from_str ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn tag_valid() {
+        assert!("auth".parse::<Tag>().is_ok());
+        assert!("my-tag".parse::<Tag>().is_ok());
+        assert!("tag_1".parse::<Tag>().is_ok());
+    }
+
+    #[test]
+    fn tag_empty_is_err() {
+        assert!("".parse::<Tag>().is_err());
+    }
+
+    #[test]
+    fn tag_space_is_err() {
+        assert!("foo bar".parse::<Tag>().is_err());
+    }
+
+    #[test]
+    fn tag_special_chars_are_err() {
+        assert!("foo!".parse::<Tag>().is_err());
+        assert!("foo.bar".parse::<Tag>().is_err());
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct FrontMatter {
     pub id: TicketId,
