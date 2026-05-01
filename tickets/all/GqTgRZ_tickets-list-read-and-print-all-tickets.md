@@ -2,7 +2,7 @@
 id: GqTgRZ
 title: tickets list - read and print all tickets
 type: task
-status: draft
+status: done
 tags: []
 parent: null
 blocked_by: []

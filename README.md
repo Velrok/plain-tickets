@@ -96,6 +96,16 @@ tickets edit <id> [--title "..."] [--type <type>] [--status <status>]
 
 Only fields explicitly passed are updated. `updated_at` is bumped automatically.
 
+### `tickets list`
+
+Prints all tickets in `tickets/all/`, sorted by status then creation date.
+
+## Global Flags
+
+| Flag | Description |
+|------|-------------|
+| `--dir <path>` | Override the tickets directory (takes precedence over `TICKETS_DIR`) |
+
 ## Environment
 
 | Variable | Description |
@@ -112,11 +122,9 @@ Only fields explicitly passed are updated. `updated_at` is bumped automatically.
 
 ## Planned
 
-- `tickets list [--status] [--type] [--tag]` — filtered ticket listing
 - `tickets show <id>` — print a single ticket
 - `tickets search <query>` — fuzzy search across title, tags, and type
 - `tickets archive <id>` — move a ticket to `archived/`
-- `--dir <path>` global flag — override tickets directory at runtime
 - `tickets/.tickets.toml` config file — per-repo configuration
 - Git auto-commit — stage and commit the ticket file after `new` / `edit`
 - TUI — interactive interface via [ratatui](https://github.com/ratatui-org/ratatui)

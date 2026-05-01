@@ -44,9 +44,14 @@ tickets/
 
 **Command pattern:** one `cmd_<name>` function per subcommand, called from `main` with typed args.
 
-## Dogfooding
+## Dogfooding & Ticket Management
 
 This project tracks its own work using itself. The `tickets/` directory contains the MVP slice tasks. Use `cargo run --` as the `tickets` binary when working on features.
+
+**Use the `tickets` CLI for all ticket management** — creating, editing, and listing tickets. Do not edit ticket files directly unless the required subcommand does not yet exist.
+
+> ⚠️ The CLI is in active development. Available subcommands and flags change frequently.
+> **Always run `cargo run -- --help` (or `cargo run -- <subcommand> --help`) to confirm what is currently available before using it.**
 
 ## Coding Style
 
