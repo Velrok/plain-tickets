@@ -236,6 +236,115 @@ fn find_ticket(dir: &Path, id: &TicketId) -> PathBuf {
     process::exit(1);
 }
 
+pub fn cmd_archive(dir: PathBuf, ids: Vec<TicketId>, all_rejected: bool) {
+    let all_dir = dir.join("all");
+    let archived_dir = dir.join("archived");
+
+    if !all_dir.exists() || !archived_dir.exists() {
+        eprintln!("error: tickets directory not initialised — run `tickets init` first");
+        process::exit(1);
+    }
+
+    if all_rejected && !ids.is_empty() {
+        eprintln!("error: --all-rejected and explicit IDs are mutually exclusive");
+        process::exit(1);
+    }
+
+    if all_rejected {
+        archive_all_rejected(&all_dir, &archived_dir);
+    } else {
+        archive_by_ids(&all_dir, &archived_dir, &ids);
+    }
+}
+
+fn archive_by_ids(all_dir: &Path, archived_dir: &Path, ids: &[TicketId]) {
+    // Validate all IDs upfront before moving anything
+    let mut errors: Vec<String> = Vec::new();
+    let mut paths: Vec<(PathBuf, PathBuf)> = Vec::new(); // (src, dst)
+
+    for id in ids {
+        let prefix = format!("{}_", id);
+        let in_all = find_by_prefix(all_dir, &prefix);
+        let in_archived = find_by_prefix(archived_dir, &prefix);
+
+        match (in_all, in_archived) {
+            (Some(src), _) => {
+                let dst = archived_dir.join(src.file_name().unwrap());
+                paths.push((src, dst));
+            }
+            (None, Some(_)) => errors.push(format!("{id}: already in archived/")),
+            (None, None) => errors.push(format!("{id}: not found")),
+        }
+    }
+
+    if !errors.is_empty() {
+        for e in &errors {
+            eprintln!("error: {e}");
+        }
+        eprintln!("no files moved");
+        process::exit(1);
+    }
+
+    for (src, dst) in &paths {
+        std::fs::rename(src, dst).unwrap_or_else(|e| {
+            eprintln!("error: could not move {}: {}", src.display(), e);
+            process::exit(1);
+        });
+        let id = dst.file_stem()
+            .and_then(|s| s.to_str())
+            .and_then(|s| s.split('_').next())
+            .unwrap_or("?");
+        println!("{}  archived → {}", id, dst.display());
+    }
+}
+
+fn archive_all_rejected(all_dir: &Path, archived_dir: &Path) {
+    let tickets: Vec<(Ticket, PathBuf)> = std::fs::read_dir(all_dir)
+        .unwrap_or_else(|e| {
+            eprintln!("error: could not read {}: {}", all_dir.display(), e);
+            process::exit(1);
+        })
+        .flatten()
+        .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("md"))
+        .filter_map(|e| {
+            let path = e.path();
+            std::fs::read_to_string(&path).ok()
+                .and_then(|raw| raw.parse::<Ticket>().ok())
+                .map(|t| (t, path))
+        })
+        .filter(|(t, _)| t.front_matter.status == TicketStatus::Rejected)
+        .collect();
+
+    if tickets.is_empty() {
+        eprintln!("nothing to archive");
+        return;
+    }
+
+    for (_, src) in &tickets {
+        let dst = archived_dir.join(src.file_name().unwrap());
+        std::fs::rename(src, &dst).unwrap_or_else(|e| {
+            eprintln!("error: could not move {}: {}", src.display(), e);
+            process::exit(1);
+        });
+        let id = dst.file_stem()
+            .and_then(|s| s.to_str())
+            .and_then(|s| s.split('_').next())
+            .unwrap_or("?");
+        println!("{}  archived → {}", id, dst.display());
+    }
+}
+
+fn find_by_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
+    std::fs::read_dir(dir).ok()?.flatten().find_map(|e| {
+        let name = e.file_name();
+        if name.to_string_lossy().starts_with(prefix) {
+            Some(e.path())
+        } else {
+            None
+        }
+    })
+}
+
 fn read_body_from_stdin() -> String {
     let mut buf = String::new();
     std::io::stdin().read_to_string(&mut buf).unwrap_or_else(|e| {

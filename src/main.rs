@@ -7,7 +7,7 @@ mod config;
 mod git;
 mod types;
 
-use commands::{cmd_edit, cmd_init, cmd_list, cmd_new, resolve_dir};
+use commands::{cmd_archive, cmd_edit, cmd_init, cmd_list, cmd_new, resolve_dir};
 use types::{Tag, TicketId, TicketStatus, TicketType, Title};
 
 #[derive(Parser)]
@@ -22,6 +22,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Archive tickets by ID or status
+    Archive {
+        /// Ticket IDs to archive
+        ids: Vec<TicketId>,
+        /// Archive all tickets with status=rejected
+        #[arg(long)]
+        all_rejected: bool,
+    },
     /// Initialise tickets directory
     Init,
     /// List all active tickets
@@ -97,6 +105,7 @@ fn main() {
     };
 
     match cli.command {
+        Commands::Archive { ids, all_rejected } => cmd_archive(dir, ids, all_rejected),
         Commands::Init => cmd_init(dir),
         Commands::List => cmd_list(dir, &cfg),
         Commands::Edit {
