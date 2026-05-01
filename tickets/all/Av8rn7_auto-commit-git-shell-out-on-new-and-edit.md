@@ -2,13 +2,13 @@
 id: Av8rn7
 title: auto-commit - git shell-out on new and edit
 type: task
-status: todo
+status: done
 tags: []
 parent: null
 blocked_by:
 - gs79xq
 created_at: 2026-05-01T22:12:09.484758Z
-updated_at: 2026-05-01T22:49:17.208120Z
+updated_at: 2026-05-01T23:00:26.086636Z
 ---
 
 ## What to build
