@@ -105,7 +105,7 @@ fn main() {
     };
 
     match cli.command {
-        Commands::Archive { ids, all_rejected } => cmd_archive(dir, ids, all_rejected),
+        Commands::Archive { ids, all_rejected } => cmd_archive(dir, &cfg, ids, all_rejected),
         Commands::Init => cmd_init(dir),
         Commands::List => cmd_list(dir, &cfg),
         Commands::Edit {

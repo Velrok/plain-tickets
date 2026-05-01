@@ -236,7 +236,7 @@ fn find_ticket(dir: &Path, id: &TicketId) -> PathBuf {
     process::exit(1);
 }
 
-pub fn cmd_archive(dir: PathBuf, ids: Vec<TicketId>, all_rejected: bool) {
+pub fn cmd_archive(dir: PathBuf, cfg: &Config, ids: Vec<TicketId>, all_rejected: bool) {
     let all_dir = dir.join("all");
     let archived_dir = dir.join("archived");
 
@@ -251,13 +251,13 @@ pub fn cmd_archive(dir: PathBuf, ids: Vec<TicketId>, all_rejected: bool) {
     }
 
     if all_rejected {
-        archive_all_rejected(&all_dir, &archived_dir);
+        archive_all_rejected(&dir, &all_dir, &archived_dir, cfg);
     } else {
-        archive_by_ids(&all_dir, &archived_dir, &ids);
+        archive_by_ids(&dir, &all_dir, &archived_dir, &ids, cfg);
     }
 }
 
-fn archive_by_ids(all_dir: &Path, archived_dir: &Path, ids: &[TicketId]) {
+fn archive_by_ids(dir: &Path, all_dir: &Path, archived_dir: &Path, ids: &[TicketId], cfg: &Config) {
     // Validate all IDs upfront before moving anything
     let mut errors: Vec<String> = Vec::new();
     let mut paths: Vec<(PathBuf, PathBuf)> = Vec::new(); // (src, dst)
@@ -295,10 +295,17 @@ fn archive_by_ids(all_dir: &Path, archived_dir: &Path, ids: &[TicketId]) {
             .and_then(|s| s.split('_').next())
             .unwrap_or("?");
         println!("{}  archived → {}", id, dst.display());
+        if cfg.git.auto_commit {
+            let message = format!("tickets: archive {id}");
+            if let Err(e) = git::git_commit(dir, dst, &message) {
+                eprintln!("{e}");
+                process::exit(1);
+            }
+        }
     }
 }
 
-fn archive_all_rejected(all_dir: &Path, archived_dir: &Path) {
+fn archive_all_rejected(dir: &Path, all_dir: &Path, archived_dir: &Path, cfg: &Config) {
     let tickets: Vec<(Ticket, PathBuf)> = std::fs::read_dir(all_dir)
         .unwrap_or_else(|e| {
             eprintln!("error: could not read {}: {}", all_dir.display(), e);
@@ -331,6 +338,13 @@ fn archive_all_rejected(all_dir: &Path, archived_dir: &Path) {
             .and_then(|s| s.split('_').next())
             .unwrap_or("?");
         println!("{}  archived → {}", id, dst.display());
+        if cfg.git.auto_commit {
+            let message = format!("tickets: archive {id}");
+            if let Err(e) = git::git_commit(dir, &dst, &message) {
+                eprintln!("{e}");
+                process::exit(1);
+            }
+        }
     }
 }
 
