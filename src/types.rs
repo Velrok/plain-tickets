@@ -11,6 +11,18 @@ pub enum TicketType {
     Bug,
 }
 
+impl std::fmt::Display for TicketType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            TicketType::Epic => "epic",
+            TicketType::Story => "story",
+            TicketType::Task => "task",
+            TicketType::Bug => "bug",
+        };
+        f.write_str(s)
+    }
+}
+
 #[derive(clap::ValueEnum, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum TicketStatus {
@@ -20,6 +32,19 @@ pub enum TicketStatus {
     InProgress,
     Done,
     Rejected,
+}
+
+impl std::fmt::Display for TicketStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            TicketStatus::Draft => "draft",
+            TicketStatus::Todo => "todo",
+            TicketStatus::InProgress => "in-progress",
+            TicketStatus::Done => "done",
+            TicketStatus::Rejected => "rejected",
+        };
+        f.write_str(s)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

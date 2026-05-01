@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand};
 mod commands;
 mod types;
 
-use commands::{cmd_edit, cmd_init, cmd_new, resolve_dir};
+use commands::{cmd_edit, cmd_init, cmd_list, cmd_new, resolve_dir};
 use types::{Tag, TicketId, TicketStatus, TicketType, Title};
 
 #[derive(Parser)]
@@ -22,6 +22,8 @@ struct Cli {
 enum Commands {
     /// Initialise tickets directory
     Init,
+    /// List all active tickets
+    List,
     /// Edit an existing ticket
     Edit {
         /// Ticket id
@@ -86,6 +88,7 @@ fn main() {
 
     match cli.command {
         Commands::Init => cmd_init(dir),
+        Commands::List => cmd_list(dir),
         Commands::Edit {
             id,
             title,

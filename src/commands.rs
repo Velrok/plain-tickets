@@ -65,6 +65,51 @@ pub fn cmd_new(
     println!("{} {}", id, filename);
 }
 
+pub fn cmd_list(dir: PathBuf) {
+    let all_dir = dir.join("all");
+    if !all_dir.exists() {
+        eprintln!("error: tickets directory not initialised — run `tickets init` first");
+        process::exit(1);
+    }
+
+    let mut tickets: Vec<Ticket> = std::fs::read_dir(&all_dir)
+        .unwrap_or_else(|e| {
+            eprintln!("error: could not read directory {}: {}", all_dir.display(), e);
+            process::exit(1);
+        })
+        .flatten()
+        .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("md"))
+        .filter_map(|e| std::fs::read_to_string(e.path()).ok())
+        .filter_map(|raw| raw.parse::<Ticket>().ok())
+        .collect();
+
+    tickets.sort_by(|a, b| {
+        let status_order = |s: &TicketStatus| match s {
+            TicketStatus::InProgress => 0,
+            TicketStatus::Todo => 1,
+            TicketStatus::Draft => 2,
+            TicketStatus::Done => 3,
+            TicketStatus::Rejected => 4,
+        };
+        status_order(&a.front_matter.status)
+            .cmp(&status_order(&b.front_matter.status))
+            .then(a.front_matter.created_at.cmp(&b.front_matter.created_at))
+    });
+
+    let id_w = tickets.iter().map(|t| t.front_matter.id.to_string().len()).max().unwrap_or(6).max(6);
+    let status_w = tickets.iter().map(|t| t.front_matter.status.to_string().len()).max().unwrap_or(6).max(6);
+    let type_w = tickets.iter().map(|t| t.front_matter.r#type.to_string().len()).max().unwrap_or(4).max(4);
+
+    for ticket in &tickets {
+        let fm = &ticket.front_matter;
+        println!(
+            "{:<id_w$}  {:<status_w$}  {:<type_w$}  {}",
+            fm.id, fm.status, fm.r#type, fm.title,
+            id_w = id_w, status_w = status_w, type_w = type_w,
+        );
+    }
+}
+
 pub fn cmd_edit(
     dir: PathBuf,
     id: TicketId,
