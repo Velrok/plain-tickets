@@ -22,8 +22,17 @@ tickets init
 # Create a ticket
 tickets new --title "Fix login bug" --type bug --tag auth
 
+# List all tickets
+tickets list
+
+# Show a single ticket
+tickets show <id>
+
 # Edit a ticket
 tickets edit <id> --status in-progress
+
+# Archive done tickets
+tickets archive <id>
 ```
 
 ## Data Format
@@ -100,6 +109,23 @@ Only fields explicitly passed are updated. `updated_at` is bumped automatically.
 
 Prints all tickets in `tickets/all/`, sorted by status then creation date.
 
+### `tickets show <id>`
+
+Pretty-prints a single ticket with emojis, human-readable timestamps, and optional body rendering.
+
+- Empty/null fields (`tags`, `parent`, `blocked_by`) are omitted.
+- Timestamps shown as `YYYY-MM-DD · N days ago`.
+- Body is rendered via `bat --language=md` if available, otherwise printed raw.
+
+### `tickets archive`
+
+```
+tickets archive <id>...
+tickets archive --all-rejected
+```
+
+Moves tickets to `tickets/archived/`. Pass one or more IDs, or `--all-rejected` to bulk-archive all rejected tickets.
+
 ## Global Flags
 
 | Flag | Description |
@@ -120,11 +146,16 @@ Prints all tickets in `tickets/all/`, sorted by status then creation date.
 - [nanoid](https://github.com/nikolaigirgin/nanoid.rs) — ticket ID generation
 - [chrono](https://github.com/chronotope/chrono) — timestamps
 
+## Configuration
+
+Create `tickets/.tickets.toml` (via `tickets init`) to configure per-repo behaviour:
+
+```toml
+[git]
+auto_commit = true   # stage and commit the ticket file after new/edit/archive
+```
+
 ## Planned
 
-- `tickets show <id>` — print a single ticket
 - `tickets search <query>` — fuzzy search across title, tags, and type
-- `tickets archive <id>` — move a ticket to `archived/`
-- `tickets/.tickets.toml` config file — per-repo configuration
-- Git auto-commit — stage and commit the ticket file after `new` / `edit`
 - TUI — interactive interface via [ratatui](https://github.com/ratatui-org/ratatui)
