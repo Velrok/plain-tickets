@@ -31,14 +31,14 @@ pub fn git_detect(dir: &Path) -> Result<(), GitError> {
     }
 }
 
-/// Stages `file` then creates a commit with `message`.
-/// Git's stderr is piped directly to the calling process's stderr.
-pub fn git_commit(dir: &Path, file: &Path, message: &str) -> Result<(), String> {
-    let dir_s = dir.to_string_lossy();
+/// Stages `file` (relative to `repo_root`) then creates a commit with `message`.
+/// `repo_root` must be the root of the git repository.
+pub fn git_commit(repo_root: &Path, file: &Path, message: &str) -> Result<(), String> {
     let file_s = file.to_string_lossy();
 
     let add = Command::new("git")
-        .args(["-C", &dir_s, "add", "--", &file_s])
+        .current_dir(repo_root)
+        .args(["add", "--", &file_s])
         .status()
         .map_err(|e| format!("error: failed to run git add: {e}"))?;
 
@@ -47,7 +47,8 @@ pub fn git_commit(dir: &Path, file: &Path, message: &str) -> Result<(), String> 
     }
 
     let commit = Command::new("git")
-        .args(["-C", &dir_s, "commit", "-m", message, "--", &file_s])
+        .current_dir(repo_root)
+        .args(["commit", "-m", message])
         .status()
         .map_err(|e| format!("error: failed to run git commit: {e}"))?;
 
@@ -85,6 +86,28 @@ mod tests {
         let dir = tmp_dir("detect_ok");
         init_git_repo(&dir);
         assert!(git_detect(&dir).is_ok());
+    }
+
+    #[test]
+    fn commit_file_in_subdirectory() {
+        // Regression: git_commit was called with the tickets subdir as repo_root,
+        // causing git to look for `tickets/tickets/archived/foo.md` instead of
+        // `tickets/archived/foo.md`.
+        let repo = tmp_dir("commit_subdir");
+        init_git_repo(&repo);
+
+        // Create tickets/archived/ structure inside the repo
+        let archived = repo.join("tickets").join("archived");
+        fs::create_dir_all(&archived).unwrap();
+
+        let file = archived.join("abc123_some-ticket.md");
+        fs::write(&file, "# hello").unwrap();
+
+        // file path is relative to repo root (as produced by commands.rs)
+        let rel = PathBuf::from("tickets/archived/abc123_some-ticket.md");
+
+        let result = git_commit(&repo, &rel, "tickets: archive abc123");
+        assert!(result.is_ok(), "git_commit failed: {:?}", result.unwrap_err());
     }
 
     #[test]
