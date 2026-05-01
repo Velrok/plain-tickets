@@ -2,12 +2,12 @@
 id: EoNYIL
 title: archive --all-rejected flag
 type: task
-status: todo
+status: done
 tags: []
 parent: null
 blocked_by: []
 created_at: 2026-05-01T22:34:42.003110Z
-updated_at: 2026-05-01T22:35:49.377148Z
+updated_at: 2026-05-01T23:05:05.186638Z
 ---
 
 ## What to build
