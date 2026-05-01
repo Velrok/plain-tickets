@@ -5,6 +5,7 @@ use std::process;
 use chrono::Utc;
 
 use crate::config::Config;
+use crate::git;
 use crate::types::{FrontMatter, Tag, Ticket, TicketId, TicketStatus, TicketType, Title};
 
 pub fn resolve_dir(flag: Option<PathBuf>) -> PathBuf {
@@ -53,7 +54,7 @@ fn git_detect(dir: &Path) -> Result<(), ()> {
 
 pub fn cmd_new(
     dir: PathBuf,
-    _cfg: &Config,
+    cfg: &Config,
     title: Title,
     ticket_type: TicketType,
     status: TicketStatus,
@@ -103,6 +104,14 @@ pub fn cmd_new(
         eprintln!("error: could not write {}: {}", path.display(), e);
         process::exit(1);
     });
+
+    if cfg.git.auto_commit {
+        let message = format!("tickets: new {} \"{}\"", id, title);
+        if let Err(e) = git::git_commit(&dir, &path, &message) {
+            eprintln!("{e}");
+            process::exit(1);
+        }
+    }
 
     println!("{} {}", id, filename);
 }
@@ -154,7 +163,7 @@ pub fn cmd_list(dir: PathBuf, _cfg: &Config) {
 
 pub fn cmd_edit(
     dir: PathBuf,
-    _cfg: &Config,
+    cfg: &Config,
     id: TicketId,
     title: Option<Title>,
     ticket_type: Option<TicketType>,
@@ -199,6 +208,14 @@ pub fn cmd_edit(
         eprintln!("error: could not write {}: {}", path.display(), e);
         process::exit(1);
     });
+
+    if cfg.git.auto_commit {
+        let message = format!("tickets: edit {} \"{}\"", ticket.front_matter.id, ticket.front_matter.title);
+        if let Err(e) = git::git_commit(&dir, &path, &message) {
+            eprintln!("{e}");
+            process::exit(1);
+        }
+    }
 
     println!("updated {}", path.file_name().unwrap().to_string_lossy());
 }

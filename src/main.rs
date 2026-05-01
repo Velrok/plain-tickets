@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand};
 
 mod commands;
 mod config;
+mod git;
 mod types;
 
 use commands::{cmd_edit, cmd_init, cmd_list, cmd_new, resolve_dir};
