@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 mod commands;
+mod config;
 mod types;
 
 use commands::{cmd_edit, cmd_init, cmd_list, cmd_new, resolve_dir};
@@ -86,9 +87,17 @@ fn main() {
     let cli = Cli::parse();
     let dir = resolve_dir(cli.dir);
 
+    let cfg = match config::load(&dir) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+    };
+
     match cli.command {
         Commands::Init => cmd_init(dir),
-        Commands::List => cmd_list(dir),
+        Commands::List => cmd_list(dir, &cfg),
         Commands::Edit {
             id,
             title,
@@ -100,7 +109,7 @@ fn main() {
             blocked_by,
             clear_blocked_by,
             body,
-        } => cmd_edit(dir, id, title, r#type, status, tag, parent, blocked_by, body, clear_parent, clear_blocked_by),
+        } => cmd_edit(dir, &cfg, id, title, r#type, status, tag, parent, blocked_by, body, clear_parent, clear_blocked_by),
         Commands::New {
             title,
             r#type,
@@ -109,6 +118,6 @@ fn main() {
             parent,
             blocked_by,
             body,
-        } => cmd_new(dir, title, r#type, status, tag, parent, blocked_by, body),
+        } => cmd_new(dir, &cfg, title, r#type, status, tag, parent, blocked_by, body),
     }
 }

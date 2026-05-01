@@ -10,11 +10,12 @@ fn init_creates_subdirs() {
 }
 
 #[test]
-fn init_is_idempotent() {
-    let dir = common::test_dir("init_is_idempotent");
-    common::tickets(&dir, &["init"]);
-    let out = common::tickets(&dir, &["init"]);
-    assert!(out.status.success(), "second init failed: {:?}", out);
-    assert!(dir.join("all").is_dir());
-    assert!(dir.join("archived").is_dir());
+fn init_errors_if_already_initialised() {
+    let dir = common::test_dir("init_errors_if_already_initialised");
+    let first = common::tickets(&dir, &["init"]);
+    assert!(first.status.success(), "first init failed: {:?}", first);
+    let second = common::tickets(&dir, &["init"]);
+    assert!(!second.status.success(), "second init should fail");
+    let stderr = String::from_utf8_lossy(&second.stderr);
+    assert!(stderr.contains("error:"), "expected error: {stderr}");
 }

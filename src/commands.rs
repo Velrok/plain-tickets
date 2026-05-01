@@ -4,6 +4,7 @@ use std::process;
 
 use chrono::Utc;
 
+use crate::config::Config;
 use crate::types::{FrontMatter, Tag, Ticket, TicketId, TicketStatus, TicketType, Title};
 
 pub fn resolve_dir(flag: Option<PathBuf>) -> PathBuf {
@@ -12,11 +13,47 @@ pub fn resolve_dir(flag: Option<PathBuf>) -> PathBuf {
 }
 
 pub fn cmd_init(dir: PathBuf) {
+    let config_path = dir.join(".tickets.toml");
+    if config_path.exists() {
+        eprintln!("error: already initialised — .tickets.toml already exists");
+        process::exit(1);
+    }
     init_directories(&dir);
+    let config_content = "\
+# plain-tickets configuration
+# Uncomment and set values to override defaults.
+
+# [git]
+# auto_commit = false
+";
+    std::fs::write(&config_path, config_content).unwrap_or_else(|e| {
+        eprintln!("error: could not create .tickets.toml: {e}");
+        process::exit(1);
+    });
+    println!("  created {}", config_path.display());
+
+    if git_detect(&dir).is_ok() {
+        println!("hint: git repository detected — set auto_commit = true in .tickets.toml to commit on every change");
+    }
+}
+
+/// Returns `Ok(())` if a `.git` directory is found at or above `dir`.
+fn git_detect(dir: &Path) -> Result<(), ()> {
+    let mut current = dir;
+    loop {
+        if current.join(".git").exists() {
+            return Ok(());
+        }
+        match current.parent() {
+            Some(parent) => current = parent,
+            None => return Err(()),
+        }
+    }
 }
 
 pub fn cmd_new(
     dir: PathBuf,
+    _cfg: &Config,
     title: Title,
     ticket_type: TicketType,
     status: TicketStatus,
@@ -31,7 +68,12 @@ pub fn cmd_new(
         process::exit(1);
     }
 
-    let id = TicketId::from(nanoid::nanoid!(6, &nanoid::alphabet::SAFE));
+    const ALPHA: [char; 36] = [
+        '0','1','2','3','4','5','6','7','8','9',
+        'a','b','c','d','e','f','g','h','i','j','k','l','m',
+        'n','o','p','q','r','s','t','u','v','w','x','y','z',
+    ];
+    let id = TicketId::from(nanoid::nanoid!(6, &ALPHA));
     let now = Utc::now();
 
     let front_matter = FrontMatter {
@@ -65,7 +107,7 @@ pub fn cmd_new(
     println!("{} {}", id, filename);
 }
 
-pub fn cmd_list(dir: PathBuf) {
+pub fn cmd_list(dir: PathBuf, _cfg: &Config) {
     let all_dir = dir.join("all");
     if !all_dir.exists() {
         eprintln!("error: tickets directory not initialised — run `tickets init` first");
@@ -112,6 +154,7 @@ pub fn cmd_list(dir: PathBuf) {
 
 pub fn cmd_edit(
     dir: PathBuf,
+    _cfg: &Config,
     id: TicketId,
     title: Option<Title>,
     ticket_type: Option<TicketType>,
