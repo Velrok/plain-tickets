@@ -19,6 +19,14 @@ Tickets in `<tickets-dir>/archived/`. Out of the active flow; not shown by defau
 ### Initialised
 A tickets directory is initialised when both `all/` and `archived/` subdirectories exist. Commands that operate on tickets hard-error if the directory is not initialised.
 
+## `tickets archive` — behaviour contract
+
+- Accepts either a list of one or more ticket IDs **or** `--all-rejected` (mutually exclusive; combining both is a hard error)
+- Moves matching ticket files from `all/` to `archived/` (filesystem move; no status field mutation)
+- `--all-rejected` scans `all/` only — tickets already in `archived/` are not touched
+- **Validation before any move:** all IDs are checked upfront; if any ID is missing or already archived, the command prints every failing ID and exits 1 with an explicit message that no files were moved
+- Single-ID failure: hard error regardless of whether the ticket is missing entirely or already in `archived/`
+
 ## `tickets list` — display contract
 
 - Reads all `.md` files from `all/` only
