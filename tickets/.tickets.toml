@@ -1,0 +1,5 @@
+# plain-tickets configuration
+# Uncomment and set values to override defaults.
+
+[git]
+auto_commit = true
