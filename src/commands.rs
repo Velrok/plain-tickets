@@ -4,29 +4,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context as _, Result, bail};
 use chrono::{DateTime, Utc};
 
+use crate::application_types::{ArchiveArgs, EditArgs, NewArgs, WorkingDir};
 use crate::config::Config;
+use crate::domain_types::{FrontMatter, Ticket, TicketId, TicketStatus};
 use crate::git;
-use crate::types::{FrontMatter, Tag, Ticket, TicketId, TicketStatus, TicketType, Title};
-
-pub struct WorkingDir(PathBuf);
-
-impl WorkingDir {
-    pub fn new(base: PathBuf) -> Result<Self> {
-        let wd = WorkingDir(base);
-        if !wd.all().exists() || !wd.archived().exists() {
-            bail!("tickets directory not initialised — run `tickets init` first");
-        }
-        Ok(wd)
-    }
-
-    pub fn all(&self) -> PathBuf { self.0.join("all") }
-    pub fn archived(&self) -> PathBuf { self.0.join("archived") }
-    pub fn config_path(&self) -> PathBuf { self.0.join(".tickets.toml") }
-}
-
-impl AsRef<Path> for WorkingDir {
-    fn as_ref(&self) -> &Path { &self.0 }
-}
 
 pub fn resolve_dir(flag: Option<PathBuf>) -> PathBuf {
     flag.or_else(|| std::env::var("TICKETS_DIR").ok().map(PathBuf::from))
@@ -72,17 +53,7 @@ fn git_detect(dir: &Path) -> Result<(), ()> {
     }
 }
 
-pub fn cmd_new(
-    dir: WorkingDir,
-    cfg: &Config,
-    title: Title,
-    ticket_type: TicketType,
-    status: TicketStatus,
-    tags: Vec<Tag>,
-    parent: Option<TicketId>,
-    blocked_by: Vec<TicketId>,
-    body: Option<String>,
-) -> Result<()> {
+pub fn cmd_new(dir: WorkingDir, cfg: &Config, args: NewArgs) -> Result<()> {
     let all_dir = dir.all();
 
     const ALPHA: [char; 36] = [
@@ -94,21 +65,21 @@ pub fn cmd_new(
 
     let front_matter = FrontMatter {
         id: id.clone(),
-        title: title.clone(),
-        r#type: ticket_type,
-        status,
-        tags,
-        parent,
-        blocked_by,
+        title: args.title.clone(),
+        r#type: args.r#type,
+        status: args.status,
+        tags: args.tag,
+        parent: args.parent,
+        blocked_by: args.blocked_by,
         created_at: now,
         updated_at: now,
     };
 
-    let slug = title.slugify();
+    let slug = args.title.slugify();
     let filename = format!("{}_{}.md", id, slug);
     let path = all_dir.join(&filename);
 
-    let body = match body.as_deref() {
+    let body = match args.body.as_deref() {
         None => String::new(),
         Some("-") => read_body_from_stdin()?,
         Some(text) => text.to_string(),
@@ -119,7 +90,7 @@ pub fn cmd_new(
         .with_context(|| format!("could not write {}", path.display()))?;
 
     if cfg.git.auto_commit {
-        let message = format!("tickets: new {} \"{}\"", id, title);
+        let message = format!("tickets: new {} \"{}\"", id, args.title);
         git::git_commit(Path::new("."), &path, &message)?;
     }
 
@@ -273,22 +244,9 @@ pub fn cmd_list(dir: WorkingDir, _cfg: &Config) -> Result<()> {
     Ok(())
 }
 
-pub fn cmd_edit(
-    dir: WorkingDir,
-    cfg: &Config,
-    id: TicketId,
-    title: Option<Title>,
-    ticket_type: Option<TicketType>,
-    status: Option<TicketStatus>,
-    tags: Vec<Tag>,
-    parent: Option<TicketId>,
-    blocked_by: Vec<TicketId>,
-    body: Option<String>,
-    clear_parent: bool,
-    clear_blocked_by: bool,
-) -> Result<()> {
+pub fn cmd_edit(dir: WorkingDir, cfg: &Config, args: EditArgs) -> Result<()> {
     let all_dir = dir.all();
-    let path = find_ticket(&all_dir, &id)?;
+    let path = find_ticket(&all_dir, &args.id)?;
 
     let raw = std::fs::read_to_string(&path)
         .with_context(|| format!("could not read {}", path.display()))?;
@@ -298,31 +256,31 @@ pub fn cmd_edit(
         .map_err(|e| anyhow::anyhow!("could not parse {}: {e}", path.display()))?;
 
     let fm = &mut ticket.front_matter;
-    if let Some(t) = title {
+    if let Some(t) = args.title {
         fm.title = t;
     }
-    if let Some(t) = ticket_type {
+    if let Some(t) = args.r#type {
         fm.r#type = t;
     }
-    if let Some(s) = status {
+    if let Some(s) = args.status {
         fm.status = s;
     }
-    if !tags.is_empty() {
-        fm.tags = tags;
+    if !args.tag.is_empty() {
+        fm.tags = args.tag;
     }
-    if clear_parent {
+    if args.clear_parent {
         fm.parent = None;
-    } else if parent.is_some() {
-        fm.parent = parent;
+    } else if args.parent.is_some() {
+        fm.parent = args.parent;
     }
-    if clear_blocked_by {
+    if args.clear_blocked_by {
         fm.blocked_by = vec![];
-    } else if !blocked_by.is_empty() {
-        fm.blocked_by = blocked_by;
+    } else if !args.blocked_by.is_empty() {
+        fm.blocked_by = args.blocked_by;
     }
     fm.updated_at = Utc::now();
 
-    if let Some(b) = body {
+    if let Some(b) = args.body {
         ticket.body = match b.as_str() {
             "-" => read_body_from_stdin()?,
             _ => b,
@@ -357,44 +315,34 @@ fn find_ticket(dir: &Path, id: &TicketId) -> Result<PathBuf> {
     bail!("no ticket found with id {}", id);
 }
 
-pub fn cmd_archive(
-    dir: WorkingDir,
-    cfg: &Config,
-    ids: Vec<TicketId>,
-    all_rejected: bool,
-) -> Result<()> {
+pub fn cmd_archive(dir: WorkingDir, cfg: &Config, args: ArchiveArgs) -> Result<()> {
     let all_dir = dir.all();
     let archived_dir = dir.archived();
 
-    if all_rejected && !ids.is_empty() {
+    if args.all_rejected && !args.ids.is_empty() {
         bail!("--all-rejected and explicit IDs are mutually exclusive");
     }
 
-    if all_rejected {
-        archive_all_rejected(&all_dir, &archived_dir, cfg)
+    if args.all_rejected {
+        archive_all_rejected(&dir, cfg)
     } else {
-        archive_by_ids(&all_dir, &archived_dir, &ids, cfg)
+        archive_by_ids(&dir, &args.ids, cfg)
     }
 }
 
-fn archive_by_ids(
-    all_dir: &Path,
-    archived_dir: &Path,
-    ids: &[TicketId],
-    cfg: &Config,
-) -> Result<()> {
+fn archive_by_ids(dir: &WorkingDir, ids: &[TicketId], cfg: &Config) -> Result<()> {
     // Validate all IDs upfront before moving anything
     let mut errors: Vec<String> = Vec::new();
     let mut paths: Vec<(PathBuf, PathBuf)> = Vec::new(); // (src, dst)
 
     for id in ids {
         let prefix = format!("{}_", id);
-        let in_all = find_by_prefix(all_dir, &prefix);
-        let in_archived = find_by_prefix(archived_dir, &prefix);
+        let in_all = find_by_prefix(&dir.all(), &prefix);
+        let in_archived = find_by_prefix(&dir.archived(), &prefix);
 
         match (in_all, in_archived) {
             (Some(src), _) => {
-                let dst = archived_dir.join(src.file_name().unwrap());
+                let dst = dir.archived().join(src.file_name().unwrap());
                 paths.push((src, dst));
             }
             (None, Some(_)) => errors.push(format!("{id}: already in archived/")),
@@ -427,13 +375,9 @@ fn archive_by_ids(
     Ok(())
 }
 
-fn archive_all_rejected(
-    all_dir: &Path,
-    archived_dir: &Path,
-    cfg: &Config,
-) -> Result<()> {
-    let tickets: Vec<(Ticket, PathBuf)> = std::fs::read_dir(all_dir)
-        .with_context(|| format!("could not read {}", all_dir.display()))?
+fn archive_all_rejected(dir: &WorkingDir, cfg: &Config) -> Result<()> {
+    let tickets: Vec<(Ticket, PathBuf)> = std::fs::read_dir(dir.all())
+        .with_context(|| format!("could not read {}", dir.all().display()))?
         .flatten()
         .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("md"))
         .filter_map(|e| {
@@ -452,7 +396,7 @@ fn archive_all_rejected(
     }
 
     for (_, src) in &tickets {
-        let dst = archived_dir.join(src.file_name().unwrap());
+        let dst = dir.archived().join(src.file_name().unwrap());
         let id = dst
             .file_stem()
             .and_then(|s| s.to_str())
