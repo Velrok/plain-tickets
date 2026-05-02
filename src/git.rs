@@ -46,6 +46,32 @@ pub fn git_commit(repo_root: &Path, file: &Path, message: &str) -> Result<()> {
     }
 }
 
+/// Moves `src` to `dst` via `git mv` then creates a commit with `message`.
+/// Both paths must be relative to `repo_root`.
+pub fn git_mv(repo_root: &Path, src: &Path, dst: &Path, message: &str) -> Result<()> {
+    let mv = Command::new("git")
+        .current_dir(repo_root)
+        .args(["mv", "--", &src.to_string_lossy(), &dst.to_string_lossy()])
+        .status()
+        .map_err(|e| anyhow::anyhow!("failed to run git mv: {e}"))?;
+
+    if !mv.success() {
+        bail!("git mv failed (exit {})", mv.code().unwrap_or(1));
+    }
+
+    let commit = Command::new("git")
+        .current_dir(repo_root)
+        .args(["commit", "-m", message])
+        .status()
+        .map_err(|e| anyhow::anyhow!("failed to run git commit: {e}"))?;
+
+    if commit.success() {
+        Ok(())
+    } else {
+        bail!("git commit failed (exit {})", commit.code().unwrap_or(1));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

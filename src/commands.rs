@@ -343,17 +343,18 @@ fn archive_by_ids(_dir: &Path, all_dir: &Path, archived_dir: &Path, ids: &[Ticke
     }
 
     for (src, dst) in &paths {
-        std::fs::rename(src, dst)
-            .with_context(|| format!("could not move {}", src.display()))?;
         let id = dst.file_stem()
             .and_then(|s| s.to_str())
             .and_then(|s| s.split('_').next())
             .unwrap_or("?");
-        println!("{}  archived → {}", id, dst.display());
         if cfg.git.auto_commit {
             let message = format!("tickets: archive {id}");
-            git::git_commit(Path::new("."), dst, &message)?;
+            git::git_mv(Path::new("."), src, dst, &message)?;
+        } else {
+            std::fs::rename(src, dst)
+                .with_context(|| format!("could not move {}", src.display()))?;
         }
+        println!("{}  archived → {}", id, dst.display());
     }
     Ok(())
 }
@@ -379,17 +380,18 @@ fn archive_all_rejected(_dir: &Path, all_dir: &Path, archived_dir: &Path, cfg: &
 
     for (_, src) in &tickets {
         let dst = archived_dir.join(src.file_name().unwrap());
-        std::fs::rename(src, &dst)
-            .with_context(|| format!("could not move {}", src.display()))?;
         let id = dst.file_stem()
             .and_then(|s| s.to_str())
             .and_then(|s| s.split('_').next())
             .unwrap_or("?");
-        println!("{}  archived → {}", id, dst.display());
         if cfg.git.auto_commit {
             let message = format!("tickets: archive {id}");
-            git::git_commit(Path::new("."), &dst, &message)?;
+            git::git_mv(Path::new("."), src, &dst, &message)?;
+        } else {
+            std::fs::rename(src, &dst)
+                .with_context(|| format!("could not move {}", src.display()))?;
         }
+        println!("{}  archived → {}", id, dst.display());
     }
     Ok(())
 }
