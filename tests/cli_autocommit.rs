@@ -127,6 +127,11 @@ fn archive_auto_commits_when_enabled() {
     assert!(msg.contains("tickets: archive"), "unexpected commit message: {msg}");
 }
 
+fn git_commit_all(dir: &std::path::Path, message: &str) {
+    Command::new("git").args(["add", "-A"]).current_dir(dir).status().unwrap();
+    Command::new("git").args(["commit", "-m", message]).current_dir(dir).status().unwrap();
+}
+
 fn git_is_clean(dir: &std::path::Path) -> bool {
     let out = Command::new("git")
         .args(["status", "--porcelain"])
@@ -144,6 +149,7 @@ fn archive_by_id_auto_commit_leaves_clean_working_tree() {
     init_git_repo(&dir);
     tickets(&dir, &["init"]);
     enable_auto_commit(&dir);
+    git_commit_all(&dir, "chore: init");
 
     let new_out = tickets(&dir, &["new", "--title", "Clean tree"]);
     assert!(new_out.status.success(), "new failed: {}", String::from_utf8_lossy(&new_out.stderr));
@@ -163,6 +169,7 @@ fn archive_all_rejected_auto_commit_leaves_clean_working_tree() {
     init_git_repo(&dir);
     tickets(&dir, &["init"]);
     enable_auto_commit(&dir);
+    git_commit_all(&dir, "chore: init");
 
     let new_out = tickets(&dir, &["new", "--title", "Reject me", "--status", "rejected"]);
     assert!(new_out.status.success());
