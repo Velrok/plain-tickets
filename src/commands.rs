@@ -1,7 +1,7 @@
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
-use std::process;
 
+use anyhow::{Context as _, Result, bail};
 use chrono::{DateTime, Utc};
 
 use crate::config::Config;
@@ -13,13 +13,12 @@ pub fn resolve_dir(flag: Option<PathBuf>) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("tickets"))
 }
 
-pub fn cmd_init(dir: PathBuf) {
+pub fn cmd_init(dir: PathBuf) -> Result<()> {
     let config_path = dir.join(".tickets.toml");
     if config_path.exists() {
-        eprintln!("error: already initialised — .tickets.toml already exists");
-        process::exit(1);
+        bail!("already initialised — .tickets.toml already exists");
     }
-    init_directories(&dir);
+    init_directories(&dir)?;
     let config_content = "\
 # plain-tickets configuration
 # Uncomment and set values to override defaults.
@@ -27,15 +26,14 @@ pub fn cmd_init(dir: PathBuf) {
 # [git]
 # auto_commit = false
 ";
-    std::fs::write(&config_path, config_content).unwrap_or_else(|e| {
-        eprintln!("error: could not create .tickets.toml: {e}");
-        process::exit(1);
-    });
+    std::fs::write(&config_path, config_content)
+        .with_context(|| format!("could not create {}", config_path.display()))?;
     println!("  created {}", config_path.display());
 
     if git_detect(&dir).is_ok() {
         println!("hint: git repository detected — set auto_commit = true in .tickets.toml to commit on every change");
     }
+    Ok(())
 }
 
 /// Returns `Ok(())` if a `.git` directory is found at or above `dir`.
@@ -62,11 +60,10 @@ pub fn cmd_new(
     parent: Option<TicketId>,
     blocked_by: Vec<TicketId>,
     body: Option<String>,
-) {
+) -> Result<()> {
     let all_dir = dir.join("all");
     if !all_dir.exists() {
-        eprintln!("error: tickets directory not initialised — run `tickets init` first");
-        process::exit(1);
+        bail!("tickets directory not initialised — run `tickets init` first");
     }
 
     const ALPHA: [char; 36] = [
@@ -95,43 +92,35 @@ pub fn cmd_new(
 
     let body = match body.as_deref() {
         None => String::new(),
-        Some("-") => read_body_from_stdin(),
+        Some("-") => read_body_from_stdin()?,
         Some(text) => text.to_string(),
     };
     let ticket = Ticket { front_matter, body };
 
-    std::fs::write(&path, ticket.to_string()).unwrap_or_else(|e| {
-        eprintln!("error: could not write {}: {}", path.display(), e);
-        process::exit(1);
-    });
+    std::fs::write(&path, ticket.to_string())
+        .with_context(|| format!("could not write {}", path.display()))?;
 
     if cfg.git.auto_commit {
         let message = format!("tickets: new {} \"{}\"", id, title);
-        if let Err(e) = git::git_commit(Path::new("."), &path, &message) {
-            eprintln!("{e}");
-            process::exit(1);
-        }
+        git::git_commit(Path::new("."), &path, &message)?;
     }
 
     println!("{} {}", id, filename);
+    Ok(())
 }
 
-pub fn cmd_show(dir: PathBuf, id: TicketId) {
+pub fn cmd_show(dir: PathBuf, id: TicketId) -> Result<()> {
     let all_dir = dir.join("all");
     if !all_dir.exists() {
-        eprintln!("error: tickets directory not initialised — run `tickets init` first");
-        process::exit(1);
+        bail!("tickets directory not initialised — run `tickets init` first");
     }
-    let path = find_ticket(&all_dir, &id);
-    let raw = std::fs::read_to_string(&path).unwrap_or_else(|e| {
-        eprintln!("error: could not read {}: {}", path.display(), e);
-        process::exit(1);
-    });
-    let ticket: Ticket = raw.parse().unwrap_or_else(|e| {
-        eprintln!("error: could not parse {}: {}", path.display(), e);
-        process::exit(1);
-    });
-    print_ticket(&ticket);
+    let path = find_ticket(&all_dir, &id)?;
+    let raw = std::fs::read_to_string(&path)
+        .with_context(|| format!("could not read {}", path.display()))?;
+    let ticket: Ticket = raw.parse()
+        .map_err(|e| anyhow::anyhow!("could not parse {}: {e}", path.display()))?;
+    print_ticket(&ticket)?;
+    Ok(())
 }
 
 fn relative_time(dt: DateTime<Utc>) -> String {
@@ -153,7 +142,7 @@ fn fmt_timestamp(dt: DateTime<Utc>) -> String {
     format!("{} · {}", dt.format("%Y-%m-%d"), relative_time(dt))
 }
 
-fn print_ticket(ticket: &Ticket) {
+fn print_ticket(ticket: &Ticket) -> Result<()> {
     let fm = &ticket.front_matter;
     println!("🎫  {}", fm.title);
     println!("📌  {}", fm.status);
@@ -173,11 +162,12 @@ fn print_ticket(ticket: &Ticket) {
     println!("✏️   updated   {}", fmt_timestamp(fm.updated_at));
     if !ticket.body.is_empty() {
         println!();
-        print_body(&ticket.body);
+        print_body(&ticket.body)?;
     }
+    Ok(())
 }
 
-fn print_body(body: &str) {
+fn print_body(body: &str) -> Result<()> {
     let bat_ok = std::process::Command::new("bat")
         .arg("--version")
         .output()
@@ -188,10 +178,7 @@ fn print_body(body: &str) {
             .args(["--language=md", "--style=plain", "--color=always", "-"])
             .stdin(std::process::Stdio::piped())
             .spawn()
-            .unwrap_or_else(|e| {
-                eprintln!("error: could not spawn bat: {e}");
-                process::exit(1);
-            });
+            .context("could not spawn bat")?;
         use std::io::Write as _;
         if let Some(stdin) = child.stdin.as_mut() {
             let _ = stdin.write_all(body.as_bytes());
@@ -200,20 +187,17 @@ fn print_body(body: &str) {
     } else {
         print!("{}", body);
     }
+    Ok(())
 }
 
-pub fn cmd_list(dir: PathBuf, _cfg: &Config) {
+pub fn cmd_list(dir: PathBuf, _cfg: &Config) -> Result<()> {
     let all_dir = dir.join("all");
     if !all_dir.exists() {
-        eprintln!("error: tickets directory not initialised — run `tickets init` first");
-        process::exit(1);
+        bail!("tickets directory not initialised — run `tickets init` first");
     }
 
     let mut tickets: Vec<Ticket> = std::fs::read_dir(&all_dir)
-        .unwrap_or_else(|e| {
-            eprintln!("error: could not read directory {}: {}", all_dir.display(), e);
-            process::exit(1);
-        })
+        .with_context(|| format!("could not read directory {}", all_dir.display()))?
         .flatten()
         .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("md"))
         .filter_map(|e| std::fs::read_to_string(e.path()).ok())
@@ -245,6 +229,7 @@ pub fn cmd_list(dir: PathBuf, _cfg: &Config) {
             id_w = id_w, status_w = status_w, type_w = type_w,
         );
     }
+    Ok(())
 }
 
 pub fn cmd_edit(
@@ -260,19 +245,15 @@ pub fn cmd_edit(
     body: Option<String>,
     clear_parent: bool,
     clear_blocked_by: bool,
-) {
+) -> Result<()> {
     let all_dir = dir.join("all");
-    let path = find_ticket(&all_dir, &id);
+    let path = find_ticket(&all_dir, &id)?;
 
-    let raw = std::fs::read_to_string(&path).unwrap_or_else(|e| {
-        eprintln!("error: could not read {}: {}", path.display(), e);
-        process::exit(1);
-    });
+    let raw = std::fs::read_to_string(&path)
+        .with_context(|| format!("could not read {}", path.display()))?;
 
-    let mut ticket: Ticket = raw.parse().unwrap_or_else(|e| {
-        eprintln!("error: could not parse {}: {}", path.display(), e);
-        process::exit(1);
-    });
+    let mut ticket: Ticket = raw.parse()
+        .map_err(|e| anyhow::anyhow!("could not parse {}: {e}", path.display()))?;
 
     let fm = &mut ticket.front_matter;
     if let Some(t) = title { fm.title = t; }
@@ -285,65 +266,56 @@ pub fn cmd_edit(
 
     if let Some(b) = body {
         ticket.body = match b.as_str() {
-            "-" => read_body_from_stdin(),
+            "-" => read_body_from_stdin()?,
             _ => b,
         };
     }
 
-    std::fs::write(&path, ticket.to_string()).unwrap_or_else(|e| {
-        eprintln!("error: could not write {}: {}", path.display(), e);
-        process::exit(1);
-    });
+    std::fs::write(&path, ticket.to_string())
+        .with_context(|| format!("could not write {}", path.display()))?;
 
     if cfg.git.auto_commit {
         let message = format!("tickets: edit {} \"{}\"", ticket.front_matter.id, ticket.front_matter.title);
-        if let Err(e) = git::git_commit(Path::new("."), &path, &message) {
-            eprintln!("{e}");
-            process::exit(1);
-        }
+        git::git_commit(Path::new("."), &path, &message)?;
     }
 
     println!("updated {}", path.file_name().unwrap().to_string_lossy());
+    Ok(())
 }
 
-fn find_ticket(dir: &Path, id: &TicketId) -> PathBuf {
+fn find_ticket(dir: &Path, id: &TicketId) -> Result<PathBuf> {
     let prefix = format!("{}_", id);
-    let entries = std::fs::read_dir(dir).unwrap_or_else(|e| {
-        eprintln!("error: could not read directory {}: {}", dir.display(), e);
-        process::exit(1);
-    });
+    let entries = std::fs::read_dir(dir)
+        .with_context(|| format!("could not read directory {}", dir.display()))?;
     for entry in entries.flatten() {
         let name = entry.file_name();
         if name.to_string_lossy().starts_with(&prefix) {
-            return entry.path();
+            return Ok(entry.path());
         }
     }
-    eprintln!("error: no ticket found with id {}", id);
-    process::exit(1);
+    bail!("no ticket found with id {}", id);
 }
 
-pub fn cmd_archive(dir: PathBuf, cfg: &Config, ids: Vec<TicketId>, all_rejected: bool) {
+pub fn cmd_archive(dir: PathBuf, cfg: &Config, ids: Vec<TicketId>, all_rejected: bool) -> Result<()> {
     let all_dir = dir.join("all");
     let archived_dir = dir.join("archived");
 
     if !all_dir.exists() || !archived_dir.exists() {
-        eprintln!("error: tickets directory not initialised — run `tickets init` first");
-        process::exit(1);
+        bail!("tickets directory not initialised — run `tickets init` first");
     }
 
     if all_rejected && !ids.is_empty() {
-        eprintln!("error: --all-rejected and explicit IDs are mutually exclusive");
-        process::exit(1);
+        bail!("--all-rejected and explicit IDs are mutually exclusive");
     }
 
     if all_rejected {
-        archive_all_rejected(&dir, &all_dir, &archived_dir, cfg);
+        archive_all_rejected(&dir, &all_dir, &archived_dir, cfg)
     } else {
-        archive_by_ids(&dir, &all_dir, &archived_dir, &ids, cfg);
+        archive_by_ids(&dir, &all_dir, &archived_dir, &ids, cfg)
     }
 }
 
-fn archive_by_ids(_dir: &Path, all_dir: &Path, archived_dir: &Path, ids: &[TicketId], cfg: &Config) {
+fn archive_by_ids(_dir: &Path, all_dir: &Path, archived_dir: &Path, ids: &[TicketId], cfg: &Config) -> Result<()> {
     // Validate all IDs upfront before moving anything
     let mut errors: Vec<String> = Vec::new();
     let mut paths: Vec<(PathBuf, PathBuf)> = Vec::new(); // (src, dst)
@@ -367,15 +339,12 @@ fn archive_by_ids(_dir: &Path, all_dir: &Path, archived_dir: &Path, ids: &[Ticke
         for e in &errors {
             eprintln!("error: {e}");
         }
-        eprintln!("no files moved");
-        process::exit(1);
+        bail!("no files moved");
     }
 
     for (src, dst) in &paths {
-        std::fs::rename(src, dst).unwrap_or_else(|e| {
-            eprintln!("error: could not move {}: {}", src.display(), e);
-            process::exit(1);
-        });
+        std::fs::rename(src, dst)
+            .with_context(|| format!("could not move {}", src.display()))?;
         let id = dst.file_stem()
             .and_then(|s| s.to_str())
             .and_then(|s| s.split('_').next())
@@ -383,20 +352,15 @@ fn archive_by_ids(_dir: &Path, all_dir: &Path, archived_dir: &Path, ids: &[Ticke
         println!("{}  archived → {}", id, dst.display());
         if cfg.git.auto_commit {
             let message = format!("tickets: archive {id}");
-            if let Err(e) = git::git_commit(Path::new("."), dst, &message) {
-                eprintln!("{e}");
-                process::exit(1);
-            }
+            git::git_commit(Path::new("."), dst, &message)?;
         }
     }
+    Ok(())
 }
 
-fn archive_all_rejected(_dir: &Path, all_dir: &Path, archived_dir: &Path, cfg: &Config) {
+fn archive_all_rejected(_dir: &Path, all_dir: &Path, archived_dir: &Path, cfg: &Config) -> Result<()> {
     let tickets: Vec<(Ticket, PathBuf)> = std::fs::read_dir(all_dir)
-        .unwrap_or_else(|e| {
-            eprintln!("error: could not read {}: {}", all_dir.display(), e);
-            process::exit(1);
-        })
+        .with_context(|| format!("could not read {}", all_dir.display()))?
         .flatten()
         .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("md"))
         .filter_map(|e| {
@@ -410,15 +374,13 @@ fn archive_all_rejected(_dir: &Path, all_dir: &Path, archived_dir: &Path, cfg: &
 
     if tickets.is_empty() {
         eprintln!("nothing to archive");
-        return;
+        return Ok(());
     }
 
     for (_, src) in &tickets {
         let dst = archived_dir.join(src.file_name().unwrap());
-        std::fs::rename(src, &dst).unwrap_or_else(|e| {
-            eprintln!("error: could not move {}: {}", src.display(), e);
-            process::exit(1);
-        });
+        std::fs::rename(src, &dst)
+            .with_context(|| format!("could not move {}", src.display()))?;
         let id = dst.file_stem()
             .and_then(|s| s.to_str())
             .and_then(|s| s.split('_').next())
@@ -426,12 +388,10 @@ fn archive_all_rejected(_dir: &Path, all_dir: &Path, archived_dir: &Path, cfg: &
         println!("{}  archived → {}", id, dst.display());
         if cfg.git.auto_commit {
             let message = format!("tickets: archive {id}");
-            if let Err(e) = git::git_commit(Path::new("."), &dst, &message) {
-                eprintln!("{e}");
-                process::exit(1);
-            }
+            git::git_commit(Path::new("."), &dst, &message)?;
         }
     }
+    Ok(())
 }
 
 fn find_by_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
@@ -445,16 +405,14 @@ fn find_by_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
     })
 }
 
-fn read_body_from_stdin() -> String {
+fn read_body_from_stdin() -> Result<String> {
     let mut buf = String::new();
-    std::io::stdin().read_to_string(&mut buf).unwrap_or_else(|e| {
-        eprintln!("error: could not read from STDIN: {}", e);
-        process::exit(1);
-    });
-    buf
+    std::io::stdin().read_to_string(&mut buf)
+        .context("could not read from STDIN")?;
+    Ok(buf)
 }
 
-fn init_directories(dir: &Path) {
+fn init_directories(dir: &Path) -> Result<()> {
     let all = dir.join("all");
     let archived = dir.join("archived");
 
@@ -462,11 +420,10 @@ fn init_directories(dir: &Path) {
         if path.exists() {
             println!("  exists  {}", path.display());
         } else {
-            std::fs::create_dir_all(path).unwrap_or_else(|e| {
-                eprintln!("error: could not create {}: {}", path.display(), e);
-                process::exit(1);
-            });
+            std::fs::create_dir_all(path)
+                .with_context(|| format!("could not create {}", path.display()))?;
             println!("  created {}", path.display());
         }
     }
+    Ok(())
 }

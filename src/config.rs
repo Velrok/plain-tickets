@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use anyhow::{Context as _, Result};
+
 #[derive(Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -26,15 +28,15 @@ impl Default for GitConfig {
     }
 }
 
-pub fn load(dir: &Path) -> Result<Config, String> {
+pub fn load(dir: &Path) -> Result<Config> {
     let path = dir.join(".tickets.toml");
     if !path.exists() {
         return Ok(Config::default());
     }
     let content = std::fs::read_to_string(&path)
-        .map_err(|e| format!("error: failed to read .tickets.toml: {e}"))?;
+        .context("failed to read .tickets.toml")?;
     toml::from_str(&content)
-        .map_err(|e| format!("error: invalid .tickets.toml: {e}"))
+        .context("invalid .tickets.toml")
 }
 
 #[cfg(test)]
@@ -72,7 +74,7 @@ mod tests {
         let dir = tmp_dir("invalid_toml");
         fs::write(dir.join(".tickets.toml"), "not toml :::").unwrap();
         let err = load(&dir).unwrap_err();
-        assert!(err.contains("error:"), "expected error prefix, got: {err}");
+        assert!(!err.to_string().is_empty(), "expected error, got empty: {err}");
     }
 
     #[test]
@@ -80,6 +82,6 @@ mod tests {
         let dir = tmp_dir("unknown_field");
         fs::write(dir.join(".tickets.toml"), "[git]\nunknown_key = true\n").unwrap();
         let err = load(&dir).unwrap_err();
-        assert!(err.contains("error:"), "expected error prefix, got: {err}");
+        assert!(!err.to_string().is_empty(), "expected error, got empty: {err}");
     }
 }

@@ -1,61 +1,48 @@
 use std::path::Path;
 use std::process::Command;
 
-#[derive(Debug)]
-pub enum GitError {
-    NotInstalled,
-    NotARepo(String),
-}
-
-impl std::fmt::Display for GitError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            GitError::NotInstalled => write!(f, "error: git not found on PATH"),
-            GitError::NotARepo(msg) => write!(f, "error: not a git repository: {msg}"),
-        }
-    }
-}
+use anyhow::{Result, bail};
 
 /// Returns `Ok(())` if `dir` (or any ancestor) is inside a git repo.
-pub fn git_detect(dir: &Path) -> Result<(), GitError> {
+pub fn git_detect(dir: &Path) -> Result<()> {
     let output = Command::new("git")
         .args(["-C", &dir.to_string_lossy(), "rev-parse", "--git-dir"])
         .output()
-        .map_err(|_| GitError::NotInstalled)?;
+        .map_err(|_| anyhow::anyhow!("git not found on PATH"))?;
 
     if output.status.success() {
         Ok(())
     } else {
         let msg = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(GitError::NotARepo(msg))
+        bail!("not a git repository: {msg}");
     }
 }
 
 /// Stages `file` (relative to `repo_root`) then creates a commit with `message`.
 /// `repo_root` must be the root of the git repository.
-pub fn git_commit(repo_root: &Path, file: &Path, message: &str) -> Result<(), String> {
+pub fn git_commit(repo_root: &Path, file: &Path, message: &str) -> Result<()> {
     let file_s = file.to_string_lossy();
 
     let add = Command::new("git")
         .current_dir(repo_root)
         .args(["add", "--", &file_s])
         .status()
-        .map_err(|e| format!("error: failed to run git add: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("failed to run git add: {e}"))?;
 
     if !add.success() {
-        return Err(format!("error: git add failed (exit {})", add.code().unwrap_or(1)));
+        bail!("git add failed (exit {})", add.code().unwrap_or(1));
     }
 
     let commit = Command::new("git")
         .current_dir(repo_root)
         .args(["commit", "-m", message])
         .status()
-        .map_err(|e| format!("error: failed to run git commit: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("failed to run git commit: {e}"))?;
 
     if commit.success() {
         Ok(())
     } else {
-        Err(format!("error: git commit failed (exit {})", commit.code().unwrap_or(1)))
+        bail!("git commit failed (exit {})", commit.code().unwrap_or(1));
     }
 }
 
@@ -117,6 +104,6 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let err = git_detect(&dir).unwrap_err();
-        assert!(matches!(err, GitError::NotARepo(_)), "expected NotARepo, got {err:?}");
+        assert!(err.to_string().contains("not a git repository"), "unexpected error: {err:?}");
     }
 }

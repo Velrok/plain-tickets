@@ -62,7 +62,12 @@ enum TicketType { Epic, Story, #[default] Task, Bug }
 
 ## Error Handling
 
-- **User-facing errors** → `eprintln!("error: ...")` + `process::exit(1)`
+- **Command functions** return `anyhow::Result<()>`; errors propagate via `?`
+- **`main()`** calls `run() -> Result<()>` and prints `error: {e}` + exits 1
+- **`bail!("...")`** for logic errors (not-found, already-initialised, etc.)
+- **`.with_context(|| ...)`** to annotate I/O errors with the file/dir path
+- **`.map_err(anyhow::Error::msg)`** to bridge `Result<_, String>` into anyhow
+  (used at call sites for `git::git_commit` and `config::load`)
 - **Validation errors** → returned from `FromStr` as `String`; clap surfaces
   them with context automatically
 - No `unwrap()` or `expect()` on fallible operations in command logic

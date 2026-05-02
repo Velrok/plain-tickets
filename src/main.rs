@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 mod commands;
@@ -98,16 +99,16 @@ enum Commands {
 }
 
 fn main() {
+    if let Err(e) = run() {
+        eprintln!("error: {e}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<()> {
     let cli = Cli::parse();
     let dir = resolve_dir(cli.dir);
-
-    let cfg = match config::load(&dir) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("{e}");
-            std::process::exit(1);
-        }
-    };
+    let cfg = config::load(&dir)?;
 
     match cli.command {
         Commands::Archive { ids, all_rejected } => cmd_archive(dir, &cfg, ids, all_rejected),
@@ -124,7 +125,20 @@ fn main() {
             blocked_by,
             clear_blocked_by,
             body,
-        } => cmd_edit(dir, &cfg, id, title, r#type, status, tag, parent, blocked_by, body, clear_parent, clear_blocked_by),
+        } => cmd_edit(
+            dir,
+            &cfg,
+            id,
+            title,
+            r#type,
+            status,
+            tag,
+            parent,
+            blocked_by,
+            body,
+            clear_parent,
+            clear_blocked_by,
+        ),
         Commands::Show { id } => cmd_show(dir, id),
         Commands::New {
             title,
@@ -134,6 +148,8 @@ fn main() {
             parent,
             blocked_by,
             body,
-        } => cmd_new(dir, &cfg, title, r#type, status, tag, parent, blocked_by, body),
+        } => cmd_new(
+            dir, &cfg, title, r#type, status, tag, parent, blocked_by, body,
+        ),
     }
 }
