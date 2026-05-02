@@ -60,6 +60,20 @@ Use `#[serde(rename_all = "kebab-case")]` to match the YAML format.
 enum TicketType { Epic, Story, #[default] Task, Bug }
 ```
 
+## Parse, Don't Validate
+
+Prefer types that are impossible to construct in an invalid state over runtime
+existence checks scattered through command logic.
+
+**Example:** `WorkingDir::new(base) -> Result<WorkingDir>` checks that `all/`
+and `archived/` exist at construction time. Every function that receives a
+`WorkingDir` can assume the directory is initialised — no per-function guard
+needed. Functions that intentionally operate before initialisation (e.g.
+`cmd_init`) take a plain `PathBuf` instead.
+
+The same principle applies to domain newtypes: `Title`, `Tag`, and `TicketId`
+validate in `FromStr`, so call sites never need to re-validate.
+
 ## Error Handling
 
 - **Command functions** return `anyhow::Result<()>`; errors propagate via `?`
