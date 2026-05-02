@@ -107,13 +107,21 @@ fn main() {
 
 fn run() -> Result<()> {
     let cli = Cli::parse();
-    let dir = resolve_dir(cli.dir);
-    let cfg = config::load(&dir)?;
+    let base_dir = resolve_dir(cli.dir);
+
+    if let Commands::Init = cli.command {
+        return cmd_init(base_dir);
+    }
+
+    let working_dir = commands::WorkingDir::new(base_dir)?;
+    let cfg = config::load(working_dir.as_ref())?;
 
     match cli.command {
-        Commands::Archive { ids, all_rejected } => cmd_archive(dir, &cfg, ids, all_rejected),
-        Commands::Init => cmd_init(dir),
-        Commands::List => cmd_list(dir, &cfg),
+        Commands::Init => unreachable!(),
+        Commands::Archive { ids, all_rejected } => {
+            cmd_archive(working_dir, &cfg, ids, all_rejected)
+        }
+        Commands::List => cmd_list(working_dir, &cfg),
         Commands::Edit {
             id,
             title,
@@ -126,7 +134,7 @@ fn run() -> Result<()> {
             clear_blocked_by,
             body,
         } => cmd_edit(
-            dir,
+            working_dir,
             &cfg,
             id,
             title,
@@ -139,7 +147,7 @@ fn run() -> Result<()> {
             clear_parent,
             clear_blocked_by,
         ),
-        Commands::Show { id } => cmd_show(dir, id),
+        Commands::Show { id } => cmd_show(working_dir, id),
         Commands::New {
             title,
             r#type,
@@ -149,7 +157,15 @@ fn run() -> Result<()> {
             blocked_by,
             body,
         } => cmd_new(
-            dir, &cfg, title, r#type, status, tag, parent, blocked_by, body,
+            working_dir,
+            &cfg,
+            title,
+            r#type,
+            status,
+            tag,
+            parent,
+            blocked_by,
+            body,
         ),
     }
 }

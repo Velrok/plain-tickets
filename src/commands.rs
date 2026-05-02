@@ -8,17 +8,37 @@ use crate::config::Config;
 use crate::git;
 use crate::types::{FrontMatter, Tag, Ticket, TicketId, TicketStatus, TicketType, Title};
 
+pub struct WorkingDir(PathBuf);
+
+impl WorkingDir {
+    pub fn new(base: PathBuf) -> Result<Self> {
+        let wd = WorkingDir(base);
+        if !wd.all().exists() || !wd.archived().exists() {
+            bail!("tickets directory not initialised — run `tickets init` first");
+        }
+        Ok(wd)
+    }
+
+    pub fn all(&self) -> PathBuf { self.0.join("all") }
+    pub fn archived(&self) -> PathBuf { self.0.join("archived") }
+    pub fn config_path(&self) -> PathBuf { self.0.join(".tickets.toml") }
+}
+
+impl AsRef<Path> for WorkingDir {
+    fn as_ref(&self) -> &Path { &self.0 }
+}
+
 pub fn resolve_dir(flag: Option<PathBuf>) -> PathBuf {
     flag.or_else(|| std::env::var("TICKETS_DIR").ok().map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("tickets"))
 }
 
-pub fn cmd_init(dir: PathBuf) -> Result<()> {
-    let config_path = dir.join(".tickets.toml");
+pub fn cmd_init(base: PathBuf) -> Result<()> {
+    let config_path = base.join(".tickets.toml");
     if config_path.exists() {
         bail!("already initialised — .tickets.toml already exists");
     }
-    init_directories(&dir)?;
+    init_directories(&base)?;
     let config_content = "\
 # plain-tickets configuration
 # Uncomment and set values to override defaults.
@@ -30,8 +50,10 @@ pub fn cmd_init(dir: PathBuf) -> Result<()> {
         .with_context(|| format!("could not create {}", config_path.display()))?;
     println!("  created {}", config_path.display());
 
-    if git_detect(&dir).is_ok() {
-        println!("hint: git repository detected — set auto_commit = true in .tickets.toml to commit on every change");
+    if git_detect(&base).is_ok() {
+        println!(
+            "hint: git repository detected — set auto_commit = true in .tickets.toml to commit on every change"
+        );
     }
     Ok(())
 }
@@ -51,7 +73,7 @@ fn git_detect(dir: &Path) -> Result<(), ()> {
 }
 
 pub fn cmd_new(
-    dir: PathBuf,
+    dir: WorkingDir,
     cfg: &Config,
     title: Title,
     ticket_type: TicketType,
@@ -61,15 +83,11 @@ pub fn cmd_new(
     blocked_by: Vec<TicketId>,
     body: Option<String>,
 ) -> Result<()> {
-    let all_dir = dir.join("all");
-    if !all_dir.exists() {
-        bail!("tickets directory not initialised — run `tickets init` first");
-    }
+    let all_dir = dir.all();
 
     const ALPHA: [char; 36] = [
-        '0','1','2','3','4','5','6','7','8','9',
-        'a','b','c','d','e','f','g','h','i','j','k','l','m',
-        'n','o','p','q','r','s','t','u','v','w','x','y','z',
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+        'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
     ];
     let id = TicketId::from(nanoid::nanoid!(6, &ALPHA));
     let now = Utc::now();
@@ -109,15 +127,12 @@ pub fn cmd_new(
     Ok(())
 }
 
-pub fn cmd_show(dir: PathBuf, id: TicketId) -> Result<()> {
-    let all_dir = dir.join("all");
-    if !all_dir.exists() {
-        bail!("tickets directory not initialised — run `tickets init` first");
-    }
-    let path = find_ticket(&all_dir, &id)?;
+pub fn cmd_show(dir: WorkingDir, id: TicketId) -> Result<()> {
+    let path = find_ticket(&dir.all(), &id)?;
     let raw = std::fs::read_to_string(&path)
         .with_context(|| format!("could not read {}", path.display()))?;
-    let ticket: Ticket = raw.parse()
+    let ticket: Ticket = raw
+        .parse()
         .map_err(|e| anyhow::anyhow!("could not parse {}: {e}", path.display()))?;
     print_ticket(&ticket)?;
     Ok(())
@@ -125,15 +140,25 @@ pub fn cmd_show(dir: PathBuf, id: TicketId) -> Result<()> {
 
 fn relative_time(dt: DateTime<Utc>) -> String {
     let secs = (Utc::now() - dt).num_seconds().max(0);
-    if secs < 60 { return "just now".to_string(); }
+    if secs < 60 {
+        return "just now".to_string();
+    }
     let mins = secs / 60;
-    if mins < 60 { return format!("{mins} minute{} ago", if mins == 1 { "" } else { "s" }); }
+    if mins < 60 {
+        return format!("{mins} minute{} ago", if mins == 1 { "" } else { "s" });
+    }
     let hours = mins / 60;
-    if hours < 24 { return format!("{hours} hour{} ago", if hours == 1 { "" } else { "s" }); }
+    if hours < 24 {
+        return format!("{hours} hour{} ago", if hours == 1 { "" } else { "s" });
+    }
     let days = hours / 24;
-    if days < 30 { return format!("{days} day{} ago", if days == 1 { "" } else { "s" }); }
+    if days < 30 {
+        return format!("{days} day{} ago", if days == 1 { "" } else { "s" });
+    }
     let months = days / 30;
-    if months < 12 { return format!("{months} month{} ago", if months == 1 { "" } else { "s" }); }
+    if months < 12 {
+        return format!("{months} month{} ago", if months == 1 { "" } else { "s" });
+    }
     let years = months / 12;
     format!("{years} year{} ago", if years == 1 { "" } else { "s" })
 }
@@ -190,12 +215,8 @@ fn print_body(body: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn cmd_list(dir: PathBuf, _cfg: &Config) -> Result<()> {
-    let all_dir = dir.join("all");
-    if !all_dir.exists() {
-        bail!("tickets directory not initialised — run `tickets init` first");
-    }
-
+pub fn cmd_list(dir: WorkingDir, _cfg: &Config) -> Result<()> {
+    let all_dir = dir.all();
     let mut tickets: Vec<Ticket> = std::fs::read_dir(&all_dir)
         .with_context(|| format!("could not read directory {}", all_dir.display()))?
         .flatten()
@@ -217,23 +238,43 @@ pub fn cmd_list(dir: PathBuf, _cfg: &Config) -> Result<()> {
             .then(a.front_matter.created_at.cmp(&b.front_matter.created_at))
     });
 
-    let id_w = tickets.iter().map(|t| t.front_matter.id.to_string().len()).max().unwrap_or(6).max(6);
-    let status_w = tickets.iter().map(|t| t.front_matter.status.to_string().len()).max().unwrap_or(6).max(6);
-    let type_w = tickets.iter().map(|t| t.front_matter.r#type.to_string().len()).max().unwrap_or(4).max(4);
+    let id_w = tickets
+        .iter()
+        .map(|t| t.front_matter.id.to_string().len())
+        .max()
+        .unwrap_or(6)
+        .max(6);
+    let status_w = tickets
+        .iter()
+        .map(|t| t.front_matter.status.to_string().len())
+        .max()
+        .unwrap_or(6)
+        .max(6);
+    let type_w = tickets
+        .iter()
+        .map(|t| t.front_matter.r#type.to_string().len())
+        .max()
+        .unwrap_or(4)
+        .max(4);
 
     for ticket in &tickets {
         let fm = &ticket.front_matter;
         println!(
             "{:<id_w$}  {:<status_w$}  {:<type_w$}  {}",
-            fm.id, fm.status, fm.r#type, fm.title,
-            id_w = id_w, status_w = status_w, type_w = type_w,
+            fm.id,
+            fm.status,
+            fm.r#type,
+            fm.title,
+            id_w = id_w,
+            status_w = status_w,
+            type_w = type_w,
         );
     }
     Ok(())
 }
 
 pub fn cmd_edit(
-    dir: PathBuf,
+    dir: WorkingDir,
     cfg: &Config,
     id: TicketId,
     title: Option<Title>,
@@ -246,22 +287,39 @@ pub fn cmd_edit(
     clear_parent: bool,
     clear_blocked_by: bool,
 ) -> Result<()> {
-    let all_dir = dir.join("all");
+    let all_dir = dir.all();
     let path = find_ticket(&all_dir, &id)?;
 
     let raw = std::fs::read_to_string(&path)
         .with_context(|| format!("could not read {}", path.display()))?;
 
-    let mut ticket: Ticket = raw.parse()
+    let mut ticket: Ticket = raw
+        .parse()
         .map_err(|e| anyhow::anyhow!("could not parse {}: {e}", path.display()))?;
 
     let fm = &mut ticket.front_matter;
-    if let Some(t) = title { fm.title = t; }
-    if let Some(t) = ticket_type { fm.r#type = t; }
-    if let Some(s) = status { fm.status = s; }
-    if !tags.is_empty() { fm.tags = tags; }
-    if clear_parent { fm.parent = None; } else if parent.is_some() { fm.parent = parent; }
-    if clear_blocked_by { fm.blocked_by = vec![]; } else if !blocked_by.is_empty() { fm.blocked_by = blocked_by; }
+    if let Some(t) = title {
+        fm.title = t;
+    }
+    if let Some(t) = ticket_type {
+        fm.r#type = t;
+    }
+    if let Some(s) = status {
+        fm.status = s;
+    }
+    if !tags.is_empty() {
+        fm.tags = tags;
+    }
+    if clear_parent {
+        fm.parent = None;
+    } else if parent.is_some() {
+        fm.parent = parent;
+    }
+    if clear_blocked_by {
+        fm.blocked_by = vec![];
+    } else if !blocked_by.is_empty() {
+        fm.blocked_by = blocked_by;
+    }
     fm.updated_at = Utc::now();
 
     if let Some(b) = body {
@@ -275,7 +333,10 @@ pub fn cmd_edit(
         .with_context(|| format!("could not write {}", path.display()))?;
 
     if cfg.git.auto_commit {
-        let message = format!("tickets: edit {} \"{}\"", ticket.front_matter.id, ticket.front_matter.title);
+        let message = format!(
+            "tickets: edit {} \"{}\"",
+            ticket.front_matter.id, ticket.front_matter.title
+        );
         git::git_commit(Path::new("."), &path, &message)?;
     }
 
@@ -296,26 +357,32 @@ fn find_ticket(dir: &Path, id: &TicketId) -> Result<PathBuf> {
     bail!("no ticket found with id {}", id);
 }
 
-pub fn cmd_archive(dir: PathBuf, cfg: &Config, ids: Vec<TicketId>, all_rejected: bool) -> Result<()> {
-    let all_dir = dir.join("all");
-    let archived_dir = dir.join("archived");
-
-    if !all_dir.exists() || !archived_dir.exists() {
-        bail!("tickets directory not initialised — run `tickets init` first");
-    }
+pub fn cmd_archive(
+    dir: WorkingDir,
+    cfg: &Config,
+    ids: Vec<TicketId>,
+    all_rejected: bool,
+) -> Result<()> {
+    let all_dir = dir.all();
+    let archived_dir = dir.archived();
 
     if all_rejected && !ids.is_empty() {
         bail!("--all-rejected and explicit IDs are mutually exclusive");
     }
 
     if all_rejected {
-        archive_all_rejected(&dir, &all_dir, &archived_dir, cfg)
+        archive_all_rejected(&all_dir, &archived_dir, cfg)
     } else {
-        archive_by_ids(&dir, &all_dir, &archived_dir, &ids, cfg)
+        archive_by_ids(&all_dir, &archived_dir, &ids, cfg)
     }
 }
 
-fn archive_by_ids(_dir: &Path, all_dir: &Path, archived_dir: &Path, ids: &[TicketId], cfg: &Config) -> Result<()> {
+fn archive_by_ids(
+    all_dir: &Path,
+    archived_dir: &Path,
+    ids: &[TicketId],
+    cfg: &Config,
+) -> Result<()> {
     // Validate all IDs upfront before moving anything
     let mut errors: Vec<String> = Vec::new();
     let mut paths: Vec<(PathBuf, PathBuf)> = Vec::new(); // (src, dst)
@@ -343,7 +410,8 @@ fn archive_by_ids(_dir: &Path, all_dir: &Path, archived_dir: &Path, ids: &[Ticke
     }
 
     for (src, dst) in &paths {
-        let id = dst.file_stem()
+        let id = dst
+            .file_stem()
             .and_then(|s| s.to_str())
             .and_then(|s| s.split('_').next())
             .unwrap_or("?");
@@ -359,14 +427,19 @@ fn archive_by_ids(_dir: &Path, all_dir: &Path, archived_dir: &Path, ids: &[Ticke
     Ok(())
 }
 
-fn archive_all_rejected(_dir: &Path, all_dir: &Path, archived_dir: &Path, cfg: &Config) -> Result<()> {
+fn archive_all_rejected(
+    all_dir: &Path,
+    archived_dir: &Path,
+    cfg: &Config,
+) -> Result<()> {
     let tickets: Vec<(Ticket, PathBuf)> = std::fs::read_dir(all_dir)
         .with_context(|| format!("could not read {}", all_dir.display()))?
         .flatten()
         .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("md"))
         .filter_map(|e| {
             let path = e.path();
-            std::fs::read_to_string(&path).ok()
+            std::fs::read_to_string(&path)
+                .ok()
                 .and_then(|raw| raw.parse::<Ticket>().ok())
                 .map(|t| (t, path))
         })
@@ -380,7 +453,8 @@ fn archive_all_rejected(_dir: &Path, all_dir: &Path, archived_dir: &Path, cfg: &
 
     for (_, src) in &tickets {
         let dst = archived_dir.join(src.file_name().unwrap());
-        let id = dst.file_stem()
+        let id = dst
+            .file_stem()
             .and_then(|s| s.to_str())
             .and_then(|s| s.split('_').next())
             .unwrap_or("?");
@@ -409,7 +483,8 @@ fn find_by_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
 
 fn read_body_from_stdin() -> Result<String> {
     let mut buf = String::new();
-    std::io::stdin().read_to_string(&mut buf)
+    std::io::stdin()
+        .read_to_string(&mut buf)
         .context("could not read from STDIN")?;
     Ok(buf)
 }
