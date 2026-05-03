@@ -2,14 +2,14 @@
 id: 9y20si
 title: TUI reads kanban columns from config
 type: task
-status: in-progress
+status: done
 tags:
 - tui
 - config
 parent: null
 blocked_by: []
 created_at: 2026-05-03T23:37:49.885880Z
-updated_at: 2026-05-03T23:53:51.005016Z
+updated_at: 2026-05-03T23:53:51.659045Z
 ---
 
 The TUI currently hardcodes kanban_columns = ["todo", "in-progress", "done"] in tui::run(). It should read from [tui] kanban_columns in .tickets.toml instead, falling back to the same defaults if not set.
