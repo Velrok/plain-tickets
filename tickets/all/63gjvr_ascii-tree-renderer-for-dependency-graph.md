@@ -2,13 +2,13 @@
 id: 63gjvr
 title: ASCII tree renderer for dependency graph
 type: task
-status: in-progress
+status: todo
 tags: []
 parent: null
 blocked_by:
 - q5rxnv
 created_at: 2026-05-03T22:50:24.333551Z
-updated_at: 2026-05-03T23:27:02.310721Z
+updated_at: 2026-05-03T23:28:13.710205Z
 ---
 
 Given a root TicketId and the graph, produce an ASCII tree string. Handles [cycle: id], [missing: id], [archived] labels, and `id  status  title` node format.
