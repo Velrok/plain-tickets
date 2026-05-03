@@ -4,6 +4,8 @@ mod render;
 pub use app::{App, Screen};
 
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::time::Duration;
 
 use anyhow::{Context as _, Result};
 use crossterm::{
@@ -11,6 +13,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+use notify::{RecursiveMode, Watcher};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 use clap::ValueEnum as _;
@@ -28,13 +31,18 @@ pub fn run(working_dir: WorkingDir, cfg: &Config) -> Result<()> {
     let tickets = load_tickets(&working_dir)?;
     let mut app = App::new(tickets, columns);
 
+    // Watch tickets/all/ for external file changes.
+    let (fs_tx, fs_rx) = mpsc::channel::<notify::Result<notify::Event>>();
+    let mut watcher = notify::recommended_watcher(fs_tx)?;
+    watcher.watch(&working_dir.all(), RecursiveMode::NonRecursive)?;
+
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let result = event_loop(&mut terminal, &mut app, &working_dir, cfg);
+    let result = event_loop(&mut terminal, &mut app, &working_dir, cfg, &fs_rx);
 
     let _ = disable_raw_mode();
     let _ = execute!(terminal.backend_mut(), LeaveAlternateScreen);
@@ -50,9 +58,25 @@ fn event_loop<B: ratatui::backend::Backend + std::io::Write>(
     app: &mut App,
     working_dir: &WorkingDir,
     cfg: &Config,
+    fs_rx: &mpsc::Receiver<notify::Result<notify::Event>>,
 ) -> Result<()> {
     loop {
         terminal.draw(|f| render::view(f, app))?;
+
+        // Drain any pending file-system events and reload if anything changed.
+        let mut fs_changed = false;
+        while fs_rx.try_recv().is_ok() {
+            fs_changed = true;
+        }
+        if fs_changed {
+            app.set_tickets(load_tickets(working_dir)?);
+        }
+
+        // Poll for a key event with a short timeout so the loop stays responsive
+        // to file changes even when the user is idle.
+        if !event::poll(Duration::from_millis(250))? {
+            continue;
+        }
 
         if let Event::Key(key) = event::read()? {
             let Some(msg) = key_to_message(key.code, &app.screen) else {
