@@ -2,13 +2,13 @@
 id: fwjmyh
 title: TUI screen corrupted after move ticket
 type: bug
-status: in-progress
+status: done
 tags:
 - tui
 parent: null
 blocked_by: []
 created_at: 2026-05-03T23:28:53.774131Z
-updated_at: 2026-05-03T23:31:26.347784Z
+updated_at: 2026-05-03T23:35:12.606807Z
 ---
 
 After pressing H or L to move a ticket between columns, the screen is partially corrupted. Git auto-commit output bleeds into the TUI (visible in the done column area and footer). The terminal is not fully restored to raw/alternate-screen mode after the git subprocess runs.
