@@ -1,0 +1,28 @@
+---
+source: src/tui/render.rs
+expression: output
+---
+┌todo─────────────────────┐┌in-progress─────────────┐┌done─────────────────────┐
+│                         ││                        ││                         │
+│                         ││                        ││                         │
+│                         ││                        ││                         │
+│                         ││                        ││                         │
+│                     ┌  Help  ──────────────────────────┐                     │
+│                     │  Keybindings                     │                     │
+│                     │                                  │                     │
+│                     │  h / ←      move focus left      │                     │
+│                     │  l / →      move focus right     │                     │
+│                     │  j / ↓      move focus down      │                     │
+│                     │  k / ↑      move focus up        │                     │
+│                     │  H          move ticket left     │                     │
+│                     │  L          move ticket right    │                     │
+│                     │  Enter/Spc  open detail view     │                     │
+│                     │  e          open in editor       │                     │
+│                     │  n          new ticket           │                     │
+│                     │  ? / F1     show this help       │                     │
+│                     └──────────────────────────────────┘                     │
+│                         ││                        ││                         │
+│                         ││                        ││                         │
+│                         ││                        ││                         │
+└─────────────────────────┘└────────────────────────┘└─────────────────────────┘
+h/l columns  j/k tickets  H/L move  Enter detail  e edit  n new  ? help  q quit

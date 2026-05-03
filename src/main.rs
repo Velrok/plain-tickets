@@ -8,6 +8,7 @@ mod commands;
 mod config;
 mod domain_types;
 mod git;
+mod tui;
 
 use application_types::{ArchiveArgs, EditArgs, NewArgs, WorkingDir};
 use commands::{cmd_archive, cmd_edit, cmd_init, cmd_list, cmd_new, cmd_show, resolve_dir};
@@ -20,7 +21,7 @@ struct Cli {
     #[arg(long, global = true)]
     dir: Option<PathBuf>,
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -44,19 +45,24 @@ fn run() -> Result<()> {
     let cli = Cli::parse();
     let base_dir = resolve_dir(cli.dir);
 
-    if let Commands::Init = cli.command {
-        return cmd_init(base_dir);
-    }
-
-    let working_dir = WorkingDir::new(base_dir)?;
-    let cfg = config::load(working_dir.as_ref())?;
-
     match cli.command {
-        Commands::Init => unreachable!(),
-        Commands::Archive(args) => cmd_archive(working_dir, &cfg, args),
-        Commands::List => cmd_list(working_dir, &cfg),
-        Commands::Edit(args) => cmd_edit(working_dir, &cfg, args),
-        Commands::Show { id } => cmd_show(working_dir, id),
-        Commands::New(args) => cmd_new(working_dir, &cfg, args),
+        None => {
+            let working_dir = WorkingDir::new(base_dir)?;
+            let cfg = config::load(working_dir.as_ref())?;
+            tui::run(working_dir, &cfg)
+        }
+        Some(Commands::Init) => cmd_init(base_dir),
+        Some(cmd) => {
+            let working_dir = WorkingDir::new(base_dir)?;
+            let cfg = config::load(working_dir.as_ref())?;
+            match cmd {
+                Commands::Init => unreachable!(),
+                Commands::Archive(args) => cmd_archive(working_dir, &cfg, args),
+                Commands::List => cmd_list(working_dir, &cfg),
+                Commands::Edit(args) => cmd_edit(working_dir, &cfg, args),
+                Commands::Show { id } => cmd_show(working_dir, id),
+                Commands::New(args) => cmd_new(working_dir, &cfg, args),
+            }
+        }
     }
 }

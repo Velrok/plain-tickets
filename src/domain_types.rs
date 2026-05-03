@@ -23,7 +23,7 @@ impl std::fmt::Display for TicketType {
     }
 }
 
-#[derive(clap::ValueEnum, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[derive(clap::ValueEnum, Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum TicketStatus {
     #[default]
