@@ -112,7 +112,7 @@ fn save_focused(app: &App, working_dir: &WorkingDir, cfg: &Config) -> Result<()>
             "tickets: edit {} \"{}\"",
             ticket.front_matter.id, ticket.front_matter.title
         );
-        crate::git::git_commit(Path::new("."), &path, &msg)?;
+        crate::git::git_commit_silent(Path::new("."), &path, &msg)?;
     }
     Ok(())
 }

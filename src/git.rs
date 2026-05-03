@@ -6,11 +6,23 @@ use anyhow::{Result, bail};
 /// Stages `file` (relative to `repo_root`) then creates a commit with `message`.
 /// `repo_root` must be the root of the git repository.
 pub fn git_commit(repo_root: &Path, file: &Path, message: &str) -> Result<()> {
+    git_commit_impl(repo_root, file, message, false)
+}
+
+/// Like `git_commit` but suppresses all subprocess output.
+/// Use this when a TUI or alternate screen is active.
+pub fn git_commit_silent(repo_root: &Path, file: &Path, message: &str) -> Result<()> {
+    git_commit_impl(repo_root, file, message, true)
+}
+
+fn git_commit_impl(repo_root: &Path, file: &Path, message: &str, silent: bool) -> Result<()> {
     let file_s = file.to_string_lossy();
 
     let add = Command::new("git")
         .current_dir(repo_root)
         .args(["add", "--", &file_s])
+        .stdout(if silent { std::process::Stdio::null() } else { std::process::Stdio::inherit() })
+        .stderr(if silent { std::process::Stdio::null() } else { std::process::Stdio::inherit() })
         .status()
         .map_err(|e| anyhow::anyhow!("failed to run git add: {e}"))?;
 
@@ -21,6 +33,8 @@ pub fn git_commit(repo_root: &Path, file: &Path, message: &str) -> Result<()> {
     let commit = Command::new("git")
         .current_dir(repo_root)
         .args(["commit", "-m", message])
+        .stdout(if silent { std::process::Stdio::null() } else { std::process::Stdio::inherit() })
+        .stderr(if silent { std::process::Stdio::null() } else { std::process::Stdio::inherit() })
         .status()
         .map_err(|e| anyhow::anyhow!("failed to run git commit: {e}"))?;
 
