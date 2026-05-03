@@ -2,12 +2,12 @@
 id: q5rxnv
 title: Build dependency graph data structure
 type: task
-status: in-progress
+status: todo
 tags: []
 parent: null
 blocked_by: []
 created_at: 2026-05-03T22:50:16.647142Z
-updated_at: 2026-05-03T23:27:11.496550Z
+updated_at: 2026-05-03T23:28:14.710062Z
 ---
 
 Load all tickets from `all/` and `archived/`; build an in-memory directed graph (TicketId → Vec<TicketId>); detect cycles; flag missing and archived nodes. No rendering — just the graph model and traversal logic.
