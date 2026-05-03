@@ -316,9 +316,6 @@ fn find_ticket(dir: &Path, id: &TicketId) -> Result<PathBuf> {
 }
 
 pub fn cmd_archive(dir: WorkingDir, cfg: &Config, args: ArchiveArgs) -> Result<()> {
-    let all_dir = dir.all();
-    let archived_dir = dir.archived();
-
     if args.all_rejected && !args.ids.is_empty() {
         bail!("--all-rejected and explicit IDs are mutually exclusive");
     }

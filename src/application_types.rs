@@ -18,7 +18,6 @@ impl WorkingDir {
 
     pub fn all(&self) -> PathBuf { self.0.join("all") }
     pub fn archived(&self) -> PathBuf { self.0.join("archived") }
-    pub fn config_path(&self) -> PathBuf { self.0.join(".tickets.toml") }
 }
 
 impl AsRef<Path> for WorkingDir {

@@ -3,21 +3,6 @@ use std::process::Command;
 
 use anyhow::{Result, bail};
 
-/// Returns `Ok(())` if `dir` (or any ancestor) is inside a git repo.
-pub fn git_detect(dir: &Path) -> Result<()> {
-    let output = Command::new("git")
-        .args(["-C", &dir.to_string_lossy(), "rev-parse", "--git-dir"])
-        .output()
-        .map_err(|_| anyhow::anyhow!("git not found on PATH"))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        let msg = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        bail!("not a git repository: {msg}");
-    }
-}
-
 /// Stages `file` (relative to `repo_root`) then creates a commit with `message`.
 /// `repo_root` must be the root of the git repository.
 pub fn git_commit(repo_root: &Path, file: &Path, message: &str) -> Result<()> {
@@ -95,13 +80,6 @@ mod tests {
     }
 
     #[test]
-    fn detect_ok_in_git_repo() {
-        let dir = tmp_dir("detect_ok");
-        init_git_repo(&dir);
-        assert!(git_detect(&dir).is_ok());
-    }
-
-    #[test]
     fn commit_file_in_subdirectory() {
         // Regression: git_commit was called with the tickets subdir as repo_root,
         // causing git to look for `tickets/tickets/archived/foo.md` instead of
@@ -123,13 +101,4 @@ mod tests {
         assert!(result.is_ok(), "git_commit failed: {:?}", result.unwrap_err());
     }
 
-    #[test]
-    fn detect_err_not_a_repo() {
-        // Must be outside the project tree so no ancestor .git is found
-        let dir = PathBuf::from("/tmp/plain-tickets-test-not-a-repo");
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        let err = git_detect(&dir).unwrap_err();
-        assert!(err.to_string().contains("not a git repository"), "unexpected error: {err:?}");
-    }
 }

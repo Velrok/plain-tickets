@@ -51,11 +51,7 @@ impl std::fmt::Display for TicketStatus {
 #[serde(transparent)]
 pub struct TicketId(String);
 
-impl TicketId {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
+impl TicketId {}
 
 impl std::fmt::Display for TicketId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
