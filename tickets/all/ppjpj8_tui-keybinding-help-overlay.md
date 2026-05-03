@@ -3,12 +3,13 @@ id: ppjpj8
 title: TUI keybinding help overlay
 type: task
 status: todo
-tags: []
+tags:
+- tui
 parent: null
 blocked_by:
 - bgk1hv
 created_at: 2026-05-03T23:02:22.270409Z
-updated_at: 2026-05-03T23:02:22.270409Z
+updated_at: 2026-05-03T23:02:49.226391Z
 ---
 
 F1 or ? renders a popup overlay listing all keybindings. Any key dismisses it.
