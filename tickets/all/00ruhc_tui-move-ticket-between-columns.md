@@ -3,12 +3,13 @@ id: 00ruhc
 title: TUI move ticket between columns
 type: task
 status: todo
-tags: []
+tags:
+- tui
 parent: null
 blocked_by:
 - bgk1hv
 created_at: 2026-05-03T23:02:08.072301Z
-updated_at: 2026-05-03T23:02:08.072301Z
+updated_at: 2026-05-03T23:02:48.514108Z
 ---
 
 H and L move the focused ticket left and right between Kanban columns, updating the status field in the ticket file. Triggers auto-commit if configured. Board re-renders immediately.
