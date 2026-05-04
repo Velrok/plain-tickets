@@ -19,10 +19,10 @@ todo                       in-progress               done
                       │  Enter/Spc  open detail view     │
                       │  e          open in editor       │
                       │  n          new ticket           │
-                      │  ? / F1     show this help       │
+                      │  y          copy ticket id       │
                       └──────────────────────────────────┘
 
 
 
 
-h/l columns  j/k tickets  H/L move  Enter detail  e edit  n new  ? help  q quit
+h/l columns  j/k tickets  H/L move  y copy id  Enter detail  e edit  n new  ? he

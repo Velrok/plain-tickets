@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use chrono::Utc;
 use clap::ValueEnum as _;
 
@@ -21,11 +23,13 @@ pub struct App {
     /// Focused row within the focused column
     pub row: usize,
     pub screen: Screen,
+    /// Transient status bar message with the time it was set.
+    pub flash: Option<(String, Instant)>,
 }
 
 impl App {
     pub fn new(tickets: Vec<Ticket>, columns: Vec<String>) -> Self {
-        App { tickets, columns, col: 0, row: 0, screen: Screen::Board }
+        App { tickets, columns, col: 0, row: 0, screen: Screen::Board, flash: None }
     }
 
     /// Indices into `self.tickets` for tickets belonging to column `col`.
@@ -147,6 +151,7 @@ pub enum Message {
     OpenEditor,
     NewTicket,
     ToggleHelp,
+    CopyId,
     Quit,
 }
 
@@ -163,6 +168,8 @@ pub enum Cmd {
     OpenEditor,
     /// Create a draft ticket with the current column's status, then open in $EDITOR.
     CreateAndEdit,
+    /// Copy the given ticket ID string to the system clipboard.
+    CopyId(String),
 }
 
 // ── update ────────────────────────────────────────────────────────────────────
@@ -220,6 +227,13 @@ pub fn update(app: &mut App, msg: Message) -> Cmd {
                 Cmd::None
             }
             Message::CloseOverlay => Cmd::None,
+            Message::CopyId => {
+                if let Some(t) = app.focused_ticket() {
+                    Cmd::CopyId(t.front_matter.id.to_string())
+                } else {
+                    Cmd::None
+                }
+            }
         },
     }
 }
@@ -491,6 +505,21 @@ mod tests {
     fn update_new_ticket_returns_create_and_edit_cmd() {
         let mut app = App::new(vec![], default_columns());
         assert_eq!(update(&mut app, Message::NewTicket), Cmd::CreateAndEdit);
+    }
+
+    #[test]
+    fn update_copy_id_returns_cmd_with_focused_id() {
+        let tickets = vec![make_ticket("abc123", "Fix bug", TicketStatus::Todo)];
+        let mut app = App::new(tickets, default_columns());
+        let cmd = update(&mut app, Message::CopyId);
+        assert_eq!(cmd, Cmd::CopyId("abc123".to_string()));
+    }
+
+    #[test]
+    fn update_copy_id_no_op_when_no_focused_ticket() {
+        let mut app = App::new(vec![], default_columns());
+        let cmd = update(&mut app, Message::CopyId);
+        assert_eq!(cmd, Cmd::None);
     }
 
     // ── set_tickets ───────────────────────────────────────────────────────

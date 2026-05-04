@@ -5,7 +5,7 @@ pub use app::{App, Screen};
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result};
 use crossterm::{
@@ -88,6 +88,7 @@ fn event_loop<B: ratatui::backend::Backend + std::io::Write>(
                 Cmd::SaveFocused => save_focused(app, working_dir, cfg)?,
                 Cmd::OpenEditor => open_in_editor(terminal, app, working_dir)?,
                 Cmd::CreateAndEdit => create_and_edit(terminal, app, working_dir)?,
+                Cmd::CopyId(id) => copy_id_to_clipboard(app, &id),
             }
         }
     }
@@ -114,6 +115,7 @@ fn key_to_message(code: KeyCode, screen: &Screen) -> Option<Message> {
             KeyCode::Enter | KeyCode::Char(' ') => Some(Message::OpenDetail),
             KeyCode::Char('e') => Some(Message::OpenEditor),
             KeyCode::Char('n') => Some(Message::NewTicket),
+            KeyCode::Char('y') => Some(Message::CopyId),
             KeyCode::Char('?') | KeyCode::F(1) => Some(Message::ToggleHelp),
             _ => None,
         },
@@ -178,6 +180,14 @@ fn create_and_edit<B: ratatui::backend::Backend + std::io::Write>(
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+
+fn copy_id_to_clipboard(app: &mut App, id: &str) {
+    let msg = match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(id)) {
+        Ok(()) => format!("Copied {}", id),
+        Err(_) => "Clipboard unavailable".to_string(),
+    };
+    app.flash = Some((msg, Instant::now()));
+}
 
 fn load_tickets(working_dir: &WorkingDir) -> Result<Vec<Ticket>> {
     let all_dir = working_dir.all();
@@ -256,6 +266,14 @@ fn resume<B: ratatui::backend::Backend + std::io::Write>(terminal: &mut Terminal
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn board_y_maps_to_copy_id() {
+        assert_eq!(
+            key_to_message(KeyCode::Char('y'), &Screen::Board),
+            Some(Message::CopyId)
+        );
+    }
 
     #[test]
     fn board_q_maps_to_quit() {

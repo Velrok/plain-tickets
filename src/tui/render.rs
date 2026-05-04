@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -53,24 +55,46 @@ fn draw_board(f: &mut Frame, app: &App) {
         let chunk = chunks[col_idx];
         let is_focused = col_idx == app.col;
 
+        let cards_area = Rect { y: chunk.y + 1, height: chunk.height.saturating_sub(1), ..chunk };
+        let indices = app.col_indices(col_idx);
+
+        // Compute scroll offset: keep focused card visible in focused column.
+        let rough_cap = ((cards_area.height / 3) as usize).max(1);
+        let scroll = if is_focused {
+            app.row.saturating_sub(rough_cap.saturating_sub(1))
+        } else {
+            0
+        };
+        let (rendered, total) = draw_cards(f, app, col_idx, &indices, cards_area, scroll);
+
+        let has_above = scroll > 0;
+        let has_below = scroll + rendered < total;
+        let suffix = match (has_above, has_below) {
+            (true, true) => " ↕",
+            (true, false) => " ↑",
+            (false, true) => " ↓",
+            (false, false) => "",
+        };
+
         let label_style = if is_focused {
             Style::default().fg(Color::Yellow)
         } else {
             Style::default()
         };
         let label_area = Rect { height: 1, ..chunk };
-        f.render_widget(Paragraph::new(col_name.as_str()).style(label_style), label_area);
-
-        let cards_area = Rect { y: chunk.y + 1, height: chunk.height.saturating_sub(1), ..chunk };
-        let indices = app.col_indices(col_idx);
-        draw_cards(f, app, col_idx, &indices, cards_area);
+        let label_text = format!("{}{}", col_name, suffix);
+        f.render_widget(Paragraph::new(label_text).style(label_style), label_area);
     }
 
-    // Footer
-    let footer = Paragraph::new(
-        "h/l columns  j/k tickets  H/L move  Enter detail  e edit  n new  ? help  q quit",
-    )
-    .style(Style::default().fg(Color::DarkGray));
+    // Footer: show flash message for 2 s, then fall back to hint.
+    const FLASH_DURATION: Duration = Duration::from_secs(2);
+    let footer_text = app
+        .flash
+        .as_ref()
+        .filter(|(_, t)| t.elapsed() < FLASH_DURATION)
+        .map(|(msg, _)| msg.as_str())
+        .unwrap_or("h/l columns  j/k tickets  H/L move  y copy id  Enter detail  e edit  n new  ? help  q quit");
+    let footer = Paragraph::new(footer_text).style(Style::default().fg(Color::DarkGray));
     f.render_widget(footer, footer_area);
 }
 
@@ -137,6 +161,7 @@ fn draw_help(f: &mut Frame) {
         Line::from("  Enter/Spc  open detail view"),
         Line::from("  e          open in editor"),
         Line::from("  n          new ticket"),
+        Line::from("  y          copy ticket id"),
         Line::from("  ? / F1     show this help"),
         Line::from("  q          quit"),
         Line::from(""),
@@ -152,15 +177,28 @@ fn draw_help(f: &mut Frame) {
 
 // ── ticket cards ──────────────────────────────────────────────────────────────
 
-fn draw_cards(f: &mut Frame, app: &App, col_idx: usize, indices: &[usize], inner: Rect) {
+fn draw_cards(
+    f: &mut Frame,
+    app: &App,
+    col_idx: usize,
+    indices: &[usize],
+    inner: Rect,
+    scroll: usize,
+) -> (usize, usize) {
+    let total = indices.len();
+    let scroll = scroll.min(total);
+    let visible = &indices[scroll..];
+
     let is_focused_col = col_idx == app.col;
     let card_width = inner.width;
     let text_width = card_width.saturating_sub(2) as usize; // minus left/right border
 
     let mut y = inner.y;
     let max_y = inner.y + inner.height;
+    let mut rendered = 0;
 
-    for (row_idx, &ti) in indices.iter().enumerate() {
+    for (idx_in_visible, &ti) in visible.iter().enumerate() {
+        let row_idx = idx_in_visible + scroll; // actual row index in column
         let fm = &app.tickets[ti].front_matter;
         let title_lines = wrap_text(&fm.title.to_string(), text_width);
         let card_height = 2 + title_lines.len() as u16; // top border + content + bottom border
@@ -203,7 +241,10 @@ fn draw_cards(f: &mut Frame, app: &App, col_idx: usize, indices: &[usize], inner
         f.render_widget(para, card_area);
 
         y += card_height;
+        rendered += 1;
     }
+
+    (rendered, total)
 }
 
 fn wrap_text(text: &str, width: usize) -> Vec<String> {
@@ -349,6 +390,53 @@ mod tests {
             body: String::new(),
         }
     }
+
+    // ── scroll ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn board_focused_card_visible_when_column_overflows() {
+        // 3 cards, small height → only 2 fit; focus on 3rd → 3rd must be visible
+        let columns = vec!["todo".to_string()];
+        let tickets = vec![
+            make_ticket("aaa111", "First ticket", TicketStatus::Todo),
+            make_ticket("bbb222", "Second ticket", TicketStatus::Todo),
+            make_ticket("ccc333", "Third ticket", TicketStatus::Todo),
+        ];
+        let mut app = App::new(tickets, columns);
+        app.row = 2; // focus on 3rd card
+        let output = render_to_string(&app, 30, 10);
+        assert!(output.contains("ccc333"), "focused card not visible: {}", output);
+        assert!(!output.contains("aaa111"), "first card should be scrolled off: {}", output);
+    }
+
+    #[test]
+    fn board_shows_down_indicator_when_cards_clipped_below() {
+        let columns = vec!["todo".to_string()];
+        let tickets = vec![
+            make_ticket("aaa111", "First ticket", TicketStatus::Todo),
+            make_ticket("bbb222", "Second ticket", TicketStatus::Todo),
+            make_ticket("ccc333", "Third ticket", TicketStatus::Todo),
+        ];
+        let app = App::new(tickets, columns); // row=0
+        let output = render_to_string(&app, 30, 10);
+        assert!(output.contains('↓'), "down indicator missing: {}", output);
+    }
+
+    #[test]
+    fn board_shows_up_indicator_when_scrolled() {
+        let columns = vec!["todo".to_string()];
+        let tickets = vec![
+            make_ticket("aaa111", "First ticket", TicketStatus::Todo),
+            make_ticket("bbb222", "Second ticket", TicketStatus::Todo),
+            make_ticket("ccc333", "Third ticket", TicketStatus::Todo),
+        ];
+        let mut app = App::new(tickets, columns);
+        app.row = 2; // scroll past visible area
+        let output = render_to_string(&app, 30, 10);
+        assert!(output.contains('↑'), "up indicator missing: {}", output);
+    }
+
+    // ── existing snapshot tests ────────────────────────────────────────────
 
     #[test]
     fn board_card_renders_as_bordered_box_with_id_in_title() {
