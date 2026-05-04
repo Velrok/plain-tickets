@@ -3,3 +3,6 @@
 
 [git]
 auto_commit = true
+
+[tui]
+kanban_columns = ["draft","todo", "in-progress", "done"]
