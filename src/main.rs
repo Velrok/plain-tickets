@@ -8,6 +8,7 @@ mod commands;
 mod config;
 mod domain_types;
 mod git;
+mod graph;
 mod tui;
 
 use application_types::{ArchiveArgs, EditArgs, ListArgs, NewArgs, WorkingDir};
