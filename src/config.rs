@@ -7,6 +7,27 @@ use anyhow::{Context as _, Result};
 pub struct Config {
     #[serde(default)]
     pub git: GitConfig,
+    #[serde(default)]
+    pub tui: TuiConfig,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TuiConfig {
+    #[serde(default = "TuiConfig::default_kanban_columns")]
+    pub kanban_columns: Vec<String>,
+}
+
+impl TuiConfig {
+    fn default_kanban_columns() -> Vec<String> {
+        vec!["todo".to_string(), "in-progress".to_string(), "done".to_string()]
+    }
+}
+
+impl Default for TuiConfig {
+    fn default() -> Self {
+        Self { kanban_columns: Self::default_kanban_columns() }
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -18,7 +39,7 @@ pub struct GitConfig {
 
 impl Default for Config {
     fn default() -> Self {
-        Self { git: GitConfig::default() }
+        Self { git: GitConfig::default(), tui: TuiConfig::default() }
     }
 }
 
@@ -75,6 +96,25 @@ mod tests {
         fs::write(dir.join(".tickets.toml"), "not toml :::").unwrap();
         let err = load(&dir).unwrap_err();
         assert!(!err.to_string().is_empty(), "expected error, got empty: {err}");
+    }
+
+    #[test]
+    fn tui_kanban_columns_defaults() {
+        let dir = tmp_dir("tui_defaults");
+        let cfg = load(&dir).unwrap();
+        assert_eq!(cfg.tui.kanban_columns, vec!["todo", "in-progress", "done"]);
+    }
+
+    #[test]
+    fn tui_kanban_columns_parsed_from_config() {
+        let dir = tmp_dir("tui_columns_parsed");
+        fs::write(
+            dir.join(".tickets.toml"),
+            "[tui]\nkanban_columns = [\"backlog\", \"active\", \"closed\"]\n",
+        )
+        .unwrap();
+        let cfg = load(&dir).unwrap();
+        assert_eq!(cfg.tui.kanban_columns, vec!["backlog", "active", "closed"]);
     }
 
     #[test]

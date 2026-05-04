@@ -27,7 +27,7 @@ use app::{Cmd, Message, update};
 // ── public entry point ────────────────────────────────────────────────────────
 
 pub fn run(working_dir: WorkingDir, cfg: &Config) -> Result<()> {
-    let columns = vec!["todo".to_string(), "in-progress".to_string(), "done".to_string()];
+    let columns = cfg.tui.kanban_columns.clone();
     let tickets = load_tickets(&working_dir)?;
     let mut app = App::new(tickets, columns);
 
