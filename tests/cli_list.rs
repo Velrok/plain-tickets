@@ -1,6 +1,94 @@
 mod common;
 
 #[test]
+fn list_filter_status_returns_matching_only() {
+    let dir = common::test_dir("list_filter_status_returns_matching_only");
+    common::tickets(&dir, &["init"]);
+    let (id_todo, _) = common::create_ticket(&dir, "Todo ticket");
+    common::tickets(&dir, &["edit", &id_todo, "--status", "todo"]);
+    let (_id_draft, _) = common::create_ticket(&dir, "Draft ticket");
+
+    let out = common::tickets(&dir, &["list", "--status", "todo"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 1, "expected 1 line, got: {:?}", lines);
+    assert!(lines[0].contains("Todo ticket"), "expected todo ticket: {}", lines[0]);
+}
+
+#[test]
+fn list_filter_status_or_semantics() {
+    let dir = common::test_dir("list_filter_status_or_semantics");
+    common::tickets(&dir, &["init"]);
+    let (id_todo, _) = common::create_ticket(&dir, "Todo ticket");
+    common::tickets(&dir, &["edit", &id_todo, "--status", "todo"]);
+    let (id_done, _) = common::create_ticket(&dir, "Done ticket");
+    common::tickets(&dir, &["edit", &id_done, "--status", "done"]);
+    let (_id_draft, _) = common::create_ticket(&dir, "Draft ticket");
+
+    let out = common::tickets(&dir, &["list", "--status", "todo", "--status", "done"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "expected 2 lines, got: {:?}", lines);
+    assert!(stdout.contains("Todo ticket"));
+    assert!(stdout.contains("Done ticket"));
+    assert!(!stdout.contains("Draft ticket"));
+}
+
+#[test]
+fn list_filter_type_returns_matching_only() {
+    let dir = common::test_dir("list_filter_type_returns_matching_only");
+    common::tickets(&dir, &["init"]);
+    common::tickets(&dir, &["new", "--title", "A bug", "--type", "bug"]);
+    common::tickets(&dir, &["new", "--title", "A task", "--type", "task"]);
+
+    let out = common::tickets(&dir, &["list", "--type", "bug"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 1, "expected 1 line, got: {:?}", lines);
+    assert!(stdout.contains("A bug"));
+    assert!(!stdout.contains("A task"));
+}
+
+#[test]
+fn list_filter_tag_and_semantics() {
+    let dir = common::test_dir("list_filter_tag_and_semantics");
+    common::tickets(&dir, &["init"]);
+    common::tickets(&dir, &["new", "--title", "Auth and API", "--tag", "auth", "--tag", "api"]);
+    common::tickets(&dir, &["new", "--title", "Auth only", "--tag", "auth"]);
+    common::tickets(&dir, &["new", "--title", "No tags"]);
+
+    let out = common::tickets(&dir, &["list", "--tag", "auth", "--tag", "api"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 1, "expected 1 line (must have both tags), got: {:?}", lines);
+    assert!(stdout.contains("Auth and API"));
+}
+
+#[test]
+fn list_no_filters_returns_all() {
+    let dir = common::test_dir("list_no_filters_returns_all");
+    common::tickets(&dir, &["init"]);
+    common::tickets(&dir, &["new", "--title", "First ticket", "--type", "bug"]);
+    common::tickets(&dir, &["new", "--title", "Second ticket", "--type", "task"]);
+
+    let out = common::tickets(&dir, &["list"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(stdout.lines().count(), 2);
+    assert!(stdout.contains("First ticket"));
+    assert!(stdout.contains("Second ticket"));
+}
+
+#[test]
 fn list_errors_when_not_initialised() {
     let dir = common::test_dir("list_errors_when_not_initialised");
     let out = common::tickets(&dir, &["list"]);

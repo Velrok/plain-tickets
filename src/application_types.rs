@@ -5,6 +5,19 @@ use clap::Args;
 
 use crate::domain_types::{Tag, TicketId, TicketStatus, TicketType, Title};
 
+#[derive(Args)]
+pub struct ListArgs {
+    /// Filter by status (repeatable, OR semantics)
+    #[arg(long)]
+    pub status: Vec<TicketStatus>,
+    /// Filter by type (repeatable, OR semantics)
+    #[arg(long)]
+    pub r#type: Vec<TicketType>,
+    /// Filter by tag (repeatable, AND semantics)
+    #[arg(long)]
+    pub tag: Vec<Tag>,
+}
+
 pub struct WorkingDir(PathBuf);
 
 impl WorkingDir {

@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context as _, Result, bail};
 use chrono::{DateTime, Utc};
 
-use crate::application_types::{ArchiveArgs, EditArgs, NewArgs, WorkingDir};
+use crate::application_types::{ArchiveArgs, EditArgs, ListArgs, NewArgs, WorkingDir};
 use crate::config::Config;
-use crate::domain_types::{FrontMatter, Ticket, TicketId, TicketStatus};
+use crate::domain_types::{FrontMatter, Tag, Ticket, TicketId, TicketStatus, TicketType};
 use crate::git;
 
 pub fn resolve_dir(flag: Option<PathBuf>) -> PathBuf {
@@ -186,7 +186,17 @@ fn print_body(body: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn cmd_list(dir: WorkingDir, _cfg: &Config) -> Result<()> {
+fn matches_filters(ticket: &Ticket, statuses: &[TicketStatus], types: &[TicketType], tags: &[Tag]) -> bool {
+    if !statuses.is_empty() && !statuses.contains(&ticket.front_matter.status) {
+        return false;
+    }
+    if !types.is_empty() && !types.contains(&ticket.front_matter.r#type) {
+        return false;
+    }
+    tags.iter().all(|tag| ticket.front_matter.tags.contains(tag))
+}
+
+pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
     let all_dir = dir.all();
     let mut tickets: Vec<Ticket> = std::fs::read_dir(&all_dir)
         .with_context(|| format!("could not read directory {}", all_dir.display()))?
@@ -194,6 +204,7 @@ pub fn cmd_list(dir: WorkingDir, _cfg: &Config) -> Result<()> {
         .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("md"))
         .filter_map(|e| std::fs::read_to_string(e.path()).ok())
         .filter_map(|raw| raw.parse::<Ticket>().ok())
+        .filter(|t| matches_filters(t, &args.status, &args.r#type, &args.tag))
         .collect();
 
     tickets.sort_by(|a, b| {

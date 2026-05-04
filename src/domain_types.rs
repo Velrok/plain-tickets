@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(clap::ValueEnum, Clone, Serialize, Deserialize, Default)]
+#[derive(clap::ValueEnum, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum TicketType {
     Epic,

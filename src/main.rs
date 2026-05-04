@@ -10,7 +10,7 @@ mod domain_types;
 mod git;
 mod tui;
 
-use application_types::{ArchiveArgs, EditArgs, NewArgs, WorkingDir};
+use application_types::{ArchiveArgs, EditArgs, ListArgs, NewArgs, WorkingDir};
 use commands::{cmd_archive, cmd_edit, cmd_init, cmd_list, cmd_new, cmd_show, resolve_dir};
 use domain_types::TicketId;
 
@@ -28,7 +28,7 @@ struct Cli {
 enum Commands {
     Archive(ArchiveArgs),
     Init,
-    List,
+    List(ListArgs),
     Show { id: TicketId },
     Edit(EditArgs),
     New(NewArgs),
@@ -58,7 +58,7 @@ fn run() -> Result<()> {
             match cmd {
                 Commands::Init => unreachable!(),
                 Commands::Archive(args) => cmd_archive(working_dir, &cfg, args),
-                Commands::List => cmd_list(working_dir, &cfg),
+                Commands::List(args) => cmd_list(working_dir, &cfg, args),
                 Commands::Edit(args) => cmd_edit(working_dir, &cfg, args),
                 Commands::Show { id } => cmd_show(working_dir, id),
                 Commands::New(args) => cmd_new(working_dir, &cfg, args),
