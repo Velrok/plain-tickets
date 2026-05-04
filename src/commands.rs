@@ -27,6 +27,10 @@ pub fn cmd_init(base: PathBuf) -> Result<()> {
 
 # [git]
 # auto_commit = false
+
+# [new]
+# default_status = \"draft\"
+# default_type = \"task\"
 ";
     std::fs::write(&config_path, config_content)
         .with_context(|| format!("could not create {}", config_path.display()))?;
@@ -74,11 +78,18 @@ pub fn cmd_new(dir: WorkingDir, cfg: &Config, args: NewArgs) -> Result<()> {
     let id = TicketId::from(nanoid::nanoid!(6, &ALPHA));
     let now = Utc::now();
 
+    let ticket_type = args.r#type
+        .or_else(|| cfg.new.default_type.as_ref().cloned())
+        .unwrap_or(TicketType::Task);
+    let status = args.status
+        .or_else(|| cfg.new.default_status.as_ref().cloned())
+        .unwrap_or(TicketStatus::Draft);
+
     let front_matter = FrontMatter {
         id: id.clone(),
         title: args.title.clone(),
-        r#type: args.r#type,
-        status: args.status,
+        r#type: ticket_type,
+        status,
         tags: args.tag,
         parent: args.parent,
         blocked_by: args.blocked_by,

@@ -84,9 +84,9 @@ pub struct NewArgs {
     /// Ticket title (required, max 120 chars)
     #[arg(long)]
     pub title: Title,
-    /// Ticket type
-    #[arg(long, default_value = "task")]
-    pub r#type: TicketType,
+    /// Ticket type (default: task, or config [new] default_type)
+    #[arg(long)]
+    pub r#type: Option<TicketType>,
     /// Tags (repeatable; letters, numbers, _ and - only)
     #[arg(long)]
     pub tag: Vec<Tag>,
@@ -96,9 +96,9 @@ pub struct NewArgs {
     /// Blocked-by ticket ids (repeatable)
     #[arg(long)]
     pub blocked_by: Vec<TicketId>,
-    /// Initial status (default: draft)
-    #[arg(long, default_value = "draft")]
-    pub status: TicketStatus,
+    /// Initial status (default: draft, or config [new] default_status)
+    #[arg(long)]
+    pub status: Option<TicketStatus>,
     /// Body text; use `-` to read from STDIN
     #[arg(long)]
     pub body: Option<String>,

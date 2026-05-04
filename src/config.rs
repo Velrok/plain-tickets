@@ -2,6 +2,8 @@ use std::path::Path;
 
 use anyhow::{Context as _, Result};
 
+use crate::domain_types::{TicketStatus, TicketType};
+
 #[derive(Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -9,6 +11,15 @@ pub struct Config {
     pub git: GitConfig,
     #[serde(default)]
     pub tui: TuiConfig,
+    #[serde(default)]
+    pub new: NewConfig,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NewConfig {
+    pub default_status: Option<TicketStatus>,
+    pub default_type: Option<TicketType>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -39,7 +50,7 @@ pub struct GitConfig {
 
 impl Default for Config {
     fn default() -> Self {
-        Self { git: GitConfig::default(), tui: TuiConfig::default() }
+        Self { git: GitConfig::default(), tui: TuiConfig::default(), new: NewConfig::default() }
     }
 }
 
