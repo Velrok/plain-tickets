@@ -2,13 +2,13 @@
 id: t0f6nq
 title: TUI copy ticket id to clipboard with y
 type: task
-status: todo
+status: done
 tags:
 - tui
 parent: null
 blocked_by: []
 created_at: 2026-05-03T23:52:08.002574Z
-updated_at: 2026-05-03T23:52:08.002574Z
+updated_at: 2026-05-04T08:45:34.902533Z
 ---
 
 Pressing 'y' on the board view copies the focused ticket's id to the system clipboard.
