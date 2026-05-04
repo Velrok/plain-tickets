@@ -2,13 +2,13 @@
 id: zf1ixl
 title: TUI kanban cards render as bordered boxes
 type: task
-status: todo
+status: in-progress
 tags:
 - tui
 parent: null
 blocked_by: []
 created_at: 2026-05-03T23:50:41.284959Z
-updated_at: 2026-05-03T23:50:41.284959Z
+updated_at: 2026-05-04T00:07:48.334719Z
 ---
 
 Replace the per-column List widget with manual Block rendering so each ticket card gets a proper border.
