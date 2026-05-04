@@ -2,27 +2,27 @@
 source: src/tui/render.rs
 expression: output
 ---
-┌todo─────────────────────┐┌in-progress─────────────┐┌done─────────────────────┐
-│📋  Fix login bug         ││                        ││                         │
-│       ┌  Detail    e edit    q/Esc back  ────────────────────────────┐       │
-│       │ID:      abc123                                               │       │
-│       │Title:   Fix login bug                                        │       │
-│       │Status:  todo                                                 │       │
-│       │Type:    task                                                 │       │
-│       │Created: 2026-05-03                                           │       │
-│       │Updated: 2026-05-03                                           │       │
-│       │                                                              │       │
-│       │                                                              │       │
-│       │                                                              │       │
-│       │                                                              │       │
-│       │                                                              │       │
-│       │                                                              │       │
-│       │                                                              │       │
-│       │                                                              │       │
-│       │                                                              │       │
-│       │                                                              │       │
-│       │                                                              │       │
-│       │                                                              │       │
-│       └──────────────────────────────────────────────────────────────┘       │
-└─────────────────────────┘└────────────────────────┘└─────────────────────────┘
+todo                       in-progress               done
+┌📋 abc123─────────────────┐
+│Fix log┌  Detail    e edit    q/Esc back  ────────────────────────────┐
+└───────│ID:      abc123                                               │
+        │Title:   Fix login bug                                        │
+        │Status:  todo                                                 │
+        │Type:    task                                                 │
+        │Created: 2026-05-04                                           │
+        │Updated: 2026-05-04                                           │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        └──────────────────────────────────────────────────────────────┘
+
 h/l columns  j/k tickets  H/L move  Enter detail  e edit  n new  ? help  q quit

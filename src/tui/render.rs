@@ -1,12 +1,12 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 
-use crate::domain_types::{FrontMatter, TicketType};
+use crate::domain_types::TicketType;
 
 use super::app::{App, Screen};
 
@@ -50,34 +50,20 @@ fn draw_board(f: &mut Frame, app: &App) {
         .split(board_area);
 
     for (col_idx, col_name) in app.columns.iter().enumerate() {
+        let chunk = chunks[col_idx];
         let is_focused = col_idx == app.col;
-        let border_style = if is_focused {
+
+        let label_style = if is_focused {
             Style::default().fg(Color::Yellow)
         } else {
             Style::default()
         };
+        let label_area = Rect { height: 1, ..chunk };
+        f.render_widget(Paragraph::new(col_name.as_str()).style(label_style), label_area);
 
-        let block = Block::default()
-            .title(col_name.as_str())
-            .borders(Borders::ALL)
-            .border_style(border_style);
-
+        let cards_area = Rect { y: chunk.y + 1, height: chunk.height.saturating_sub(1), ..chunk };
         let indices = app.col_indices(col_idx);
-        let items: Vec<ListItem> = indices
-            .iter()
-            .map(|&ti| ticket_list_item(&app.tickets[ti].front_matter))
-            .collect();
-
-        let mut list_state = ListState::default();
-        if is_focused && !indices.is_empty() {
-            list_state.select(Some(app.row.min(indices.len().saturating_sub(1))));
-        }
-
-        let list = List::new(items)
-            .block(block)
-            .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
-
-        f.render_stateful_widget(list, chunks[col_idx], &mut list_state);
+        draw_cards(f, app, col_idx, &indices, cards_area);
     }
 
     // Footer
@@ -164,27 +150,95 @@ fn draw_help(f: &mut Frame) {
     f.render_widget(para, area);
 }
 
-// ── ticket card ───────────────────────────────────────────────────────────────
+// ── ticket cards ──────────────────────────────────────────────────────────────
 
-fn ticket_list_item(fm: &FrontMatter) -> ListItem<'static> {
-    let mut spans = vec![type_span(&fm.r#type), Span::raw(fm.title.to_string())];
-    for tag in &fm.tags {
-        spans.push(Span::raw(" "));
-        spans.push(Span::styled(
-            format!("#{}", tag),
-            Style::default().fg(tag_color(tag.to_string().as_str())),
-        ));
+fn draw_cards(f: &mut Frame, app: &App, col_idx: usize, indices: &[usize], inner: Rect) {
+    let is_focused_col = col_idx == app.col;
+    let card_width = inner.width;
+    let text_width = card_width.saturating_sub(2) as usize; // minus left/right border
+
+    let mut y = inner.y;
+    let max_y = inner.y + inner.height;
+
+    for (row_idx, &ti) in indices.iter().enumerate() {
+        let fm = &app.tickets[ti].front_matter;
+        let title_lines = wrap_text(&fm.title.to_string(), text_width);
+        let card_height = 2 + title_lines.len() as u16; // top border + content + bottom border
+
+        if y + card_height > max_y {
+            break;
+        }
+
+        let card_area = Rect { x: inner.x, y, width: card_width, height: card_height };
+
+        let is_focused = is_focused_col && row_idx == app.row;
+        let border_style = if is_focused {
+            Style::default().fg(Color::Cyan)
+        } else {
+            Style::default()
+        };
+
+        let header = Line::from(vec![type_span(&fm.r#type), Span::raw(fm.id.to_string())]);
+        let mut block = Block::default()
+            .title_top(header)
+            .borders(Borders::ALL)
+            .border_style(border_style);
+
+        if !fm.tags.is_empty() {
+            let mut tag_spans: Vec<Span> = Vec::new();
+            for tag in &fm.tags {
+                tag_spans.push(Span::raw(" "));
+                tag_spans.push(Span::styled(
+                    format!("#{}", tag),
+                    Style::default().fg(tag_color(tag.to_string().as_str())),
+                ));
+            }
+            tag_spans.push(Span::raw(" "));
+            block = block.title_bottom(Line::from(tag_spans).right_aligned());
+        }
+
+        let content: Vec<Line> =
+            title_lines.into_iter().map(|l| Line::from(l)).collect();
+        let para = Paragraph::new(Text::from(content)).block(block);
+        f.render_widget(para, card_area);
+
+        y += card_height;
     }
-    ListItem::new(Line::from(spans))
+}
+
+fn wrap_text(text: &str, width: usize) -> Vec<String> {
+    if width == 0 {
+        return vec![text.to_string()];
+    }
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for word in text.split_whitespace() {
+        if current.is_empty() {
+            current.push_str(word);
+        } else if current.len() + 1 + word.len() <= width {
+            current.push(' ');
+            current.push_str(word);
+        } else {
+            lines.push(current.clone());
+            current = word.to_string();
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
 }
 
 fn type_span(t: &TicketType) -> Span<'static> {
     // Emoji are 2-wide; ratatui measures via unicode-width so layout is correct.
     match t {
-        TicketType::Epic  => Span::raw("🌟 "),
-        TicketType::Story => Span::raw("📖 "),
-        TicketType::Task  => Span::raw("📋 "),
-        TicketType::Bug   => Span::raw("🐛 "),
+        TicketType::Epic  => Span::raw("🌟"),
+        TicketType::Story => Span::raw("📖"),
+        TicketType::Task  => Span::raw("📋"),
+        TicketType::Bug   => Span::raw("🐛"),
     }
 }
 
@@ -276,6 +330,65 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    fn make_ticket_with_tags(id: &str, title: &str, status: TicketStatus, tags: &[&str]) -> Ticket {
+        let now = Utc::now();
+        Ticket {
+            front_matter: FrontMatter {
+                id: TicketId::from(id.to_string()),
+                title: title.parse::<Title>().unwrap(),
+                r#type: TicketType::Task,
+                status,
+                tags: tags.iter().map(|t| t.parse().unwrap()).collect(),
+                parent: None,
+                blocked_by: vec![],
+                created_at: now,
+                updated_at: now,
+            },
+            body: String::new(),
+        }
+    }
+
+    #[test]
+    fn board_card_renders_as_bordered_box_with_id_in_title() {
+        let columns = vec!["todo".to_string()];
+        let tickets = vec![make_ticket("abc123", "Fix login bug", TicketStatus::Todo)];
+        let app = App::new(tickets, columns);
+        let output = render_to_string(&app, 30, 10);
+        insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn board_card_footer_shows_tags() {
+        let columns = vec!["todo".to_string()];
+        let tickets = vec![make_ticket_with_tags("abc123", "Fix login bug", TicketStatus::Todo, &["tui", "config"])];
+        let app = App::new(tickets, columns);
+        let output = render_to_string(&app, 30, 10);
+        insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn board_card_wraps_long_title() {
+        let columns = vec!["todo".to_string()];
+        let tickets = vec![make_ticket("abc123", "Fix the login bug on the home page", TicketStatus::Todo)];
+        let app = App::new(tickets, columns);
+        let output = render_to_string(&app, 30, 12);
+        insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn board_cards_clip_when_column_overflows() {
+        let columns = vec!["todo".to_string()];
+        let tickets = vec![
+            make_ticket("aaa111", "First ticket", TicketStatus::Todo),
+            make_ticket("bbb222", "Second ticket", TicketStatus::Todo),
+            make_ticket("ccc333", "Third ticket should not appear", TicketStatus::Todo),
+        ];
+        let app = App::new(tickets, columns);
+        // height=10: outer column borders (2) + 3 cards × 3 lines = 11 → third card clips
+        let output = render_to_string(&app, 30, 10);
+        insta::assert_snapshot!(output);
     }
 
     #[test]
