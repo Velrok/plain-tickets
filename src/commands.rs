@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use crate::application_types::{ArchiveArgs, EditArgs, ListArgs, NewArgs, WorkingDir};
 use crate::config::Config;
 use crate::domain_types::{FrontMatter, Tag, Ticket, TicketId, TicketStatus, TicketType};
+use crate::graph::{DepGraph, render_forest, render_tree};
 use crate::git;
 
 pub fn resolve_dir(flag: Option<PathBuf>) -> PathBuf {
@@ -51,6 +52,16 @@ fn git_detect(dir: &Path) -> Result<(), ()> {
             None => return Err(()),
         }
     }
+}
+
+pub fn cmd_graph(dir: WorkingDir, id: Option<TicketId>) -> Result<()> {
+    let graph = DepGraph::build(&dir)?;
+    let output = match id {
+        Some(ref root) => render_tree(&graph, root),
+        None => render_forest(&graph),
+    };
+    print!("{}", output);
+    Ok(())
 }
 
 pub fn cmd_new(dir: WorkingDir, cfg: &Config, args: NewArgs) -> Result<()> {

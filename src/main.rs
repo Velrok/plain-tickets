@@ -12,7 +12,7 @@ mod graph;
 mod tui;
 
 use application_types::{ArchiveArgs, EditArgs, ListArgs, NewArgs, WorkingDir};
-use commands::{cmd_archive, cmd_edit, cmd_init, cmd_list, cmd_new, cmd_show, resolve_dir};
+use commands::{cmd_archive, cmd_edit, cmd_graph, cmd_init, cmd_list, cmd_new, cmd_show, resolve_dir};
 use domain_types::TicketId;
 
 #[derive(Parser)]
@@ -28,6 +28,8 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Archive(ArchiveArgs),
+    /// Show dependency graph. No ID = full forest; with ID = tree rooted at that ticket.
+    Graph { id: Option<TicketId> },
     Init,
     List(ListArgs),
     Show { id: TicketId },
@@ -59,6 +61,7 @@ fn run() -> Result<()> {
             match cmd {
                 Commands::Init => unreachable!(),
                 Commands::Archive(args) => cmd_archive(working_dir, &cfg, args),
+                Commands::Graph { id } => cmd_graph(working_dir, id),
                 Commands::List(args) => cmd_list(working_dir, &cfg, args),
                 Commands::Edit(args) => cmd_edit(working_dir, &cfg, args),
                 Commands::Show { id } => cmd_show(working_dir, id),
