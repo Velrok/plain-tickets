@@ -2,13 +2,13 @@
 id: joxwzs
 title: TUI kanban column card scrolling
 type: task
-status: todo
+status: done
 tags:
 - tui
 parent: zf1ixl
 blocked_by: []
 created_at: 2026-05-03T23:50:49.167689Z
-updated_at: 2026-05-04T00:07:32.710495Z
+updated_at: 2026-05-04T08:45:34.597185Z
 ---
 
 When a column contains more cards than fit vertically, the user cannot see or navigate to cards below the fold. Add scroll support to kanban columns.
