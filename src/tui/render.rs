@@ -59,9 +59,8 @@ fn draw_board(f: &mut Frame, app: &App) {
         let indices = app.col_indices(col_idx);
 
         // Compute scroll offset: keep focused card visible in focused column.
-        let rough_cap = ((cards_area.height / 3) as usize).max(1);
         let scroll = if is_focused {
-            app.row.saturating_sub(rough_cap.saturating_sub(1))
+            scroll_for_row(&indices, app, app.row, cards_area)
         } else {
             0
         };
@@ -176,6 +175,34 @@ fn draw_help(f: &mut Frame) {
 }
 
 // ── ticket cards ──────────────────────────────────────────────────────────────
+
+/// Returns the scroll offset that places `target_row` as the bottom-most visible
+/// card, filling any remaining space with cards above it.
+fn scroll_for_row(indices: &[usize], app: &App, target_row: usize, area: Rect) -> usize {
+    if indices.is_empty() || target_row >= indices.len() {
+        return 0;
+    }
+    let text_width = area.width.saturating_sub(2) as usize;
+    let card_h = |ti: usize| -> u16 {
+        let title = app.tickets[ti].front_matter.title.to_string();
+        2 + wrap_text(&title, text_width).len() as u16
+    };
+    let focused_h = card_h(indices[target_row]);
+    if focused_h >= area.height {
+        return target_row;
+    }
+    let mut remaining = area.height - focused_h;
+    let mut scroll = target_row;
+    while scroll > 0 {
+        let h = card_h(indices[scroll - 1]);
+        if h > remaining {
+            break;
+        }
+        remaining -= h;
+        scroll -= 1;
+    }
+    scroll
+}
 
 fn draw_cards(
     f: &mut Frame,
@@ -434,6 +461,31 @@ mod tests {
         app.row = 2; // scroll past visible area
         let output = render_to_string(&app, 30, 10);
         assert!(output.contains('↑'), "up indicator missing: {}", output);
+    }
+
+    #[test]
+    fn focused_card_always_visible_while_navigating_down() {
+        // Cards with 2-line titles have height=4.
+        // Terminal height=13 → board=12, cards_area=11.
+        // rough_cap = 11/3 = 3, but actual capacity = 11/4 = 2 (3 cards = 12 > 11).
+        // Bug: at row=2, scroll=0 so card 2 is not rendered (only 0 and 1 fit).
+        let ids = ["aa1111", "bb2222", "cc3333", "dd4444", "ee5555"];
+        let long_title = "A title that wraps to a second line here";
+        let columns = vec!["todo".to_string()];
+        let tickets = ids
+            .iter()
+            .map(|id| make_ticket(id, long_title, TicketStatus::Todo))
+            .collect();
+        let mut app = App::new(tickets, columns);
+        for row in 0..ids.len() {
+            app.row = row;
+            let output = render_to_string(&app, 30, 13);
+            assert!(
+                output.contains(ids[row]),
+                "row={row}: focused card '{}' not visible\n{output}",
+                ids[row]
+            );
+        }
     }
 
     // ── existing snapshot tests ────────────────────────────────────────────
