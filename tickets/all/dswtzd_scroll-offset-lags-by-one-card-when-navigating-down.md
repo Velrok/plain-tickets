@@ -2,13 +2,13 @@
 id: dswtzd
 title: Scroll offset lags by one card when navigating down
 type: bug
-status: todo
+status: in-progress
 tags:
 - tui
 parent: null
 blocked_by: []
 created_at: 2026-05-04T08:49:15.895997Z
-updated_at: 2026-05-14T00:15:38.368284Z
+updated_at: 2026-05-14T00:15:38.735473Z
 ---
 
 When navigating down (j) in a column with overflow, the scroll offset updates too late. The first card that goes out of view remains invisible until focus reaches the last card in the list.
