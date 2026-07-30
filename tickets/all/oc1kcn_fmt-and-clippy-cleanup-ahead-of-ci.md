@@ -2,12 +2,12 @@
 id: oc1kcn
 title: fmt and clippy cleanup ahead of CI
 type: task
-status: draft
+status: in-progress
 tags: []
 parent: null
 blocked_by: []
 created_at: 2026-07-30T18:41:50.134443Z
-updated_at: 2026-07-30T18:42:07.359098Z
+updated_at: 2026-07-30T18:44:58.671190Z
 ---
 
 ## What
@@ -22,4 +22,4 @@ Bring the codebase in line with `cargo fmt` and `cargo clippy -- -D warnings` so
 - Verify `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` both pass clean.
 
 ## Why
-[[67nvy3]] adds a CI workflow that enforces `cargo fmt --check` and `cargo clippy -- -D warnings`. Both currently fail on existing code, so this needs to land first.
+Ticket 67nvy3 adds a CI workflow that enforces `cargo fmt --check` and `cargo clippy -- -D warnings`. Both currently fail on existing code, so this needs to land first.
