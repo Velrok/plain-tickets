@@ -36,7 +36,11 @@ impl DepGraph {
         for (id, ticket) in active.iter().chain(archived.iter()) {
             edges.insert(id.clone(), ticket.front_matter.blocked_by.clone());
         }
-        DepGraph { active, archived, edges }
+        DepGraph {
+            active,
+            archived,
+            edges,
+        }
     }
 
     pub fn node_kind(&self, id: &TicketId) -> NodeKind {
@@ -173,11 +177,17 @@ fn format_label(graph: &DepGraph, id: &TicketId) -> String {
         NodeKind::Missing => format!("[missing: {}]", id),
         NodeKind::Active => {
             let t = graph.get_ticket(id).unwrap();
-            format!("{}  {}  {}", id, t.front_matter.status, t.front_matter.title)
+            format!(
+                "{}  {}  {}",
+                id, t.front_matter.status, t.front_matter.title
+            )
         }
         NodeKind::Archived => {
             let t = graph.get_ticket(id).unwrap();
-            format!("{}  {}  {}  [archived]", id, t.front_matter.status, t.front_matter.title)
+            format!(
+                "{}  {}  {}  [archived]",
+                id, t.front_matter.status, t.front_matter.title
+            )
         }
     }
 }
@@ -236,7 +246,9 @@ mod tests {
     #[test]
     fn render_tree_single_node() {
         let graph = DepGraph::from_maps(
-            [(id("abc123"), make_ticket("abc123", vec![]))].into_iter().collect(),
+            [(id("abc123"), make_ticket("abc123", vec![]))]
+                .into_iter()
+                .collect(),
             HashMap::new(),
         );
         let out = render_tree(&graph, &id("abc123"));
@@ -255,10 +267,7 @@ mod tests {
             HashMap::new(),
         );
         let out = render_tree(&graph, &id("a"));
-        assert_eq!(
-            out,
-            "a  todo  Test ticket\n└── b  todo  Test ticket\n"
-        );
+        assert_eq!(out, "a  todo  Test ticket\n└── b  todo  Test ticket\n");
     }
 
     #[test]
@@ -299,21 +308,33 @@ mod tests {
     #[test]
     fn render_tree_missing_node() {
         let graph = DepGraph::from_maps(
-            [(id("a"), make_ticket("a", vec!["ghost"]))].into_iter().collect(),
+            [(id("a"), make_ticket("a", vec!["ghost"]))]
+                .into_iter()
+                .collect(),
             HashMap::new(),
         );
         let out = render_tree(&graph, &id("a"));
-        assert!(out.contains("[missing: ghost]"), "expected missing label: {}", out);
+        assert!(
+            out.contains("[missing: ghost]"),
+            "expected missing label: {}",
+            out
+        );
     }
 
     #[test]
     fn render_tree_archived_node_has_label() {
         let graph = DepGraph::from_maps(
-            [(id("a"), make_ticket("a", vec!["b"]))].into_iter().collect(),
+            [(id("a"), make_ticket("a", vec!["b"]))]
+                .into_iter()
+                .collect(),
             [(id("b"), make_ticket("b", vec![]))].into_iter().collect(),
         );
         let out = render_tree(&graph, &id("a"));
-        assert!(out.contains("[archived]"), "expected archived label: {}", out);
+        assert!(
+            out.contains("[archived]"),
+            "expected archived label: {}",
+            out
+        );
     }
 
     #[test]
@@ -337,8 +358,11 @@ mod tests {
         assert!(out.contains("b  todo  Test ticket"));
         // c appears as a child of b, not as a root line without prefix
         let lines: Vec<&str> = out.lines().collect();
-        assert!(!lines.iter().any(|l| *l == "c  todo  Test ticket"),
-            "c should not be a root: {}", out);
+        assert!(
+            !lines.iter().any(|l| *l == "c  todo  Test ticket"),
+            "c should not be a root: {}",
+            out
+        );
     }
 
     // ── node_kind ─────────────────────────────────────────────────────────────
@@ -346,7 +370,9 @@ mod tests {
     #[test]
     fn node_kind_active_ticket() {
         let graph = DepGraph::from_maps(
-            [(id("abc123"), make_ticket("abc123", vec![]))].into_iter().collect(),
+            [(id("abc123"), make_ticket("abc123", vec![]))]
+                .into_iter()
+                .collect(),
             HashMap::new(),
         );
         assert_eq!(graph.node_kind(&id("abc123")), NodeKind::Active);
@@ -356,7 +382,9 @@ mod tests {
     fn node_kind_archived_ticket() {
         let graph = DepGraph::from_maps(
             HashMap::new(),
-            [(id("abc123"), make_ticket("abc123", vec![]))].into_iter().collect(),
+            [(id("abc123"), make_ticket("abc123", vec![]))]
+                .into_iter()
+                .collect(),
         );
         assert_eq!(graph.node_kind(&id("abc123")), NodeKind::Archived);
     }
@@ -426,7 +454,9 @@ mod tests {
     #[test]
     fn missing_blocker_is_flagged_as_missing() {
         let graph = DepGraph::from_maps(
-            [(id("a"), make_ticket("a", vec!["ghost"]))].into_iter().collect(),
+            [(id("a"), make_ticket("a", vec!["ghost"]))]
+                .into_iter()
+                .collect(),
             HashMap::new(),
         );
         assert_eq!(graph.node_kind(&id("ghost")), NodeKind::Missing);
@@ -435,7 +465,9 @@ mod tests {
     #[test]
     fn archived_blocker_is_flagged_as_archived() {
         let graph = DepGraph::from_maps(
-            [(id("a"), make_ticket("a", vec!["b"]))].into_iter().collect(),
+            [(id("a"), make_ticket("a", vec!["b"]))]
+                .into_iter()
+                .collect(),
             [(id("b"), make_ticket("b", vec![]))].into_iter().collect(),
         );
         assert_eq!(graph.node_kind(&id("b")), NodeKind::Archived);

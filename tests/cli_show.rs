@@ -6,7 +6,11 @@ fn show_errors_when_not_initialised() {
     let out = common::tickets(&dir, &["show", "abc123"]);
     assert!(!out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("not initialised"), "unexpected stderr: {}", stderr);
+    assert!(
+        stderr.contains("not initialised"),
+        "unexpected stderr: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -16,7 +20,11 @@ fn show_errors_when_id_not_found() {
     let out = common::tickets(&dir, &["show", "xxxxxx"]);
     assert!(!out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("xxxxxx"), "expected id in error: {}", stderr);
+    assert!(
+        stderr.contains("xxxxxx"),
+        "expected id in error: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -58,9 +66,26 @@ fn show_displays_tags_and_parent_when_set() {
     let dir = common::test_dir("show_displays_tags_and_parent_when_set");
     common::tickets(&dir, &["init"]);
     let (parent_id, _) = common::create_ticket(&dir, "Parent ticket");
-    let out = common::tickets(&dir, &["new", "--title", "Child ticket", "--tag", "auth", "--tag", "backend", "--parent", &parent_id]);
+    let out = common::tickets(
+        &dir,
+        &[
+            "new",
+            "--title",
+            "Child ticket",
+            "--tag",
+            "auth",
+            "--tag",
+            "backend",
+            "--parent",
+            &parent_id,
+        ],
+    );
     assert!(out.status.success());
-    let child_id = String::from_utf8_lossy(&out.stdout).split_whitespace().next().unwrap().to_string();
+    let child_id = String::from_utf8_lossy(&out.stdout)
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string();
 
     let out = common::tickets(&dir, &["show", &child_id]);
     assert!(out.status.success());
@@ -77,14 +102,30 @@ fn show_displays_tags_and_parent_when_set() {
 fn show_displays_body_when_present() {
     let dir = common::test_dir("show_displays_body_when_present");
     common::tickets(&dir, &["init"]);
-    let out = common::tickets(&dir, &["new", "--title", "Ticket with body", "--body", "Some description here."]);
+    let out = common::tickets(
+        &dir,
+        &[
+            "new",
+            "--title",
+            "Ticket with body",
+            "--body",
+            "Some description here.",
+        ],
+    );
     assert!(out.status.success());
-    let id = String::from_utf8_lossy(&out.stdout).split_whitespace().next().unwrap().to_string();
+    let id = String::from_utf8_lossy(&out.stdout)
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string();
 
     let out = common::tickets(&dir, &["show", &id]);
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("Some description here."), "expected body text");
+    assert!(
+        stdout.contains("Some description here."),
+        "expected body text"
+    );
 }
 
 #[test]
@@ -101,5 +142,8 @@ fn show_timestamps_include_date_and_relative() {
     // Relative time separator
     assert!(stdout.contains(" · "), "expected · separator");
     // Relative time (just created)
-    assert!(stdout.contains("just now") || stdout.contains("ago"), "expected relative time");
+    assert!(
+        stdout.contains("just now") || stdout.contains("ago"),
+        "expected relative time"
+    );
 }

@@ -29,12 +29,18 @@ impl WorkingDir {
         Ok(wd)
     }
 
-    pub fn all(&self) -> PathBuf { self.0.join("all") }
-    pub fn archived(&self) -> PathBuf { self.0.join("archived") }
+    pub fn all(&self) -> PathBuf {
+        self.0.join("all")
+    }
+    pub fn archived(&self) -> PathBuf {
+        self.0.join("archived")
+    }
 }
 
 impl AsRef<Path> for WorkingDir {
-    fn as_ref(&self) -> &Path { &self.0 }
+    fn as_ref(&self) -> &Path {
+        &self.0
+    }
 }
 
 #[derive(Args)]

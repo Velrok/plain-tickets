@@ -28,14 +28,22 @@ fn new_with_type_tags_status() {
     let dir = common::test_dir("new_with_type_tags_status");
     common::tickets(&dir, &["init"]);
 
-    let out = common::tickets(&dir, &[
-        "new",
-        "--title", "Auth epic",
-        "--type", "epic",
-        "--status", "todo",
-        "--tag", "auth",
-        "--tag", "backend",
-    ]);
+    let out = common::tickets(
+        &dir,
+        &[
+            "new",
+            "--title",
+            "Auth epic",
+            "--type",
+            "epic",
+            "--status",
+            "todo",
+            "--tag",
+            "auth",
+            "--tag",
+            "backend",
+        ],
+    );
     assert!(out.status.success(), "new failed: {:?}", out);
 
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -58,7 +66,11 @@ fn new_filename_slug_matches_title() {
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let filename = stdout.trim().splitn(2, ' ').nth(1).unwrap();
-    assert!(filename.ends_with("fix-login-bug.md"), "unexpected filename: {}", filename);
+    assert!(
+        filename.ends_with("fix-login-bug.md"),
+        "unexpected filename: {}",
+        filename
+    );
 }
 
 #[test]
@@ -73,7 +85,12 @@ fn new_stdout_id_matches_filename_prefix() {
     let mut parts = stdout.trim().splitn(2, ' ');
     let id = parts.next().unwrap();
     let filename = parts.next().unwrap();
-    assert!(filename.starts_with(id), "filename {} does not start with id {}", filename, id);
+    assert!(
+        filename.starts_with(id),
+        "filename {} does not start with id {}",
+        filename,
+        id
+    );
 }
 
 #[test]
@@ -81,7 +98,16 @@ fn new_with_body() {
     let dir = common::test_dir("new_with_body");
     common::tickets(&dir, &["init"]);
 
-    let out = common::tickets(&dir, &["new", "--title", "Bodied ticket", "--body", "This is the body."]);
+    let out = common::tickets(
+        &dir,
+        &[
+            "new",
+            "--title",
+            "Bodied ticket",
+            "--body",
+            "This is the body.",
+        ],
+    );
     assert!(out.status.success());
 
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -96,7 +122,10 @@ fn new_with_parent() {
     common::tickets(&dir, &["init"]);
     let (parent_id, _) = common::create_ticket(&dir, "Parent ticket");
 
-    let out = common::tickets(&dir, &["new", "--title", "Child ticket", "--parent", &parent_id]);
+    let out = common::tickets(
+        &dir,
+        &["new", "--title", "Child ticket", "--parent", &parent_id],
+    );
     assert!(out.status.success());
 
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -111,7 +140,16 @@ fn new_with_blocked_by() {
     common::tickets(&dir, &["init"]);
     let (blocker_id, _) = common::create_ticket(&dir, "Blocker ticket");
 
-    let out = common::tickets(&dir, &["new", "--title", "Blocked ticket", "--blocked-by", &blocker_id]);
+    let out = common::tickets(
+        &dir,
+        &[
+            "new",
+            "--title",
+            "Blocked ticket",
+            "--blocked-by",
+            &blocker_id,
+        ],
+    );
     assert!(out.status.success());
 
     let stdout = String::from_utf8_lossy(&out.stdout);

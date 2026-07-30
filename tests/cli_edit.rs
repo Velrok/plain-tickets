@@ -83,7 +83,10 @@ fn edit_replaces_tags() {
     let dir = common::test_dir("edit_replaces_tags");
     common::tickets(&dir, &["init"]);
     // create with initial tags
-    let out = common::tickets(&dir, &["new", "--title", "Tagged ticket", "--tag", "old-tag"]);
+    let out = common::tickets(
+        &dir,
+        &["new", "--title", "Tagged ticket", "--tag", "old-tag"],
+    );
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
     let mut parts = stdout.trim().splitn(2, ' ');

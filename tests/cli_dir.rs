@@ -55,7 +55,10 @@ fn dir_flag_edit_updates_ticket_in_specified_dir() {
         .map(|e| std::fs::read_to_string(e.path()).unwrap())
         .next()
         .unwrap();
-    assert!(content.contains("updated title"), "title not updated in file");
+    assert!(
+        content.contains("updated title"),
+        "title not updated in file"
+    );
 }
 
 #[test]
@@ -69,14 +72,26 @@ fn dir_flag_takes_precedence_over_tickets_dir_env() {
 
     // Run with TICKETS_DIR pointing at env_dir but --dir pointing at flag_dir
     let out = Command::new(bin())
-        .args(["--dir", flag_dir.to_str().unwrap(), "new", "--title", "precedence test"])
+        .args([
+            "--dir",
+            flag_dir.to_str().unwrap(),
+            "new",
+            "--title",
+            "precedence test",
+        ])
         .env("TICKETS_DIR", &env_dir)
         .output()
         .expect("failed to run tickets binary");
     assert!(out.status.success(), "new failed: {:?}", out);
 
-    let flag_tickets: Vec<_> = std::fs::read_dir(flag_dir.join("all")).unwrap().flatten().collect();
-    let env_tickets: Vec<_> = std::fs::read_dir(env_dir.join("all")).unwrap().flatten().collect();
+    let flag_tickets: Vec<_> = std::fs::read_dir(flag_dir.join("all"))
+        .unwrap()
+        .flatten()
+        .collect();
+    let env_tickets: Vec<_> = std::fs::read_dir(env_dir.join("all"))
+        .unwrap()
+        .flatten()
+        .collect();
     assert_eq!(flag_tickets.len(), 1, "ticket should be in --dir path");
     assert_eq!(env_tickets.len(), 0, "TICKETS_DIR path should be empty");
 }

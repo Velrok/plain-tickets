@@ -14,7 +14,11 @@ fn list_filter_status_returns_matching_only() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     let lines: Vec<&str> = stdout.lines().collect();
     assert_eq!(lines.len(), 1, "expected 1 line, got: {:?}", lines);
-    assert!(lines[0].contains("Todo ticket"), "expected todo ticket: {}", lines[0]);
+    assert!(
+        lines[0].contains("Todo ticket"),
+        "expected todo ticket: {}",
+        lines[0]
+    );
 }
 
 #[test]
@@ -59,7 +63,18 @@ fn list_filter_type_returns_matching_only() {
 fn list_filter_tag_and_semantics() {
     let dir = common::test_dir("list_filter_tag_and_semantics");
     common::tickets(&dir, &["init"]);
-    common::tickets(&dir, &["new", "--title", "Auth and API", "--tag", "auth", "--tag", "api"]);
+    common::tickets(
+        &dir,
+        &[
+            "new",
+            "--title",
+            "Auth and API",
+            "--tag",
+            "auth",
+            "--tag",
+            "api",
+        ],
+    );
     common::tickets(&dir, &["new", "--title", "Auth only", "--tag", "auth"]);
     common::tickets(&dir, &["new", "--title", "No tags"]);
 
@@ -68,7 +83,12 @@ fn list_filter_tag_and_semantics() {
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let lines: Vec<&str> = stdout.lines().collect();
-    assert_eq!(lines.len(), 1, "expected 1 line (must have both tags), got: {:?}", lines);
+    assert_eq!(
+        lines.len(),
+        1,
+        "expected 1 line (must have both tags), got: {:?}",
+        lines
+    );
     assert!(stdout.contains("Auth and API"));
 }
 
@@ -94,7 +114,11 @@ fn list_errors_when_not_initialised() {
     let out = common::tickets(&dir, &["list"]);
     assert!(!out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("not initialised"), "unexpected stderr: {}", stderr);
+    assert!(
+        stderr.contains("not initialised"),
+        "unexpected stderr: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -118,10 +142,26 @@ fn list_shows_one_ticket() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     let lines: Vec<&str> = stdout.lines().collect();
     assert_eq!(lines.len(), 1, "expected 1 line, got: {:?}", lines);
-    assert!(lines[0].starts_with(&id), "line should start with id: {}", lines[0]);
-    assert!(lines[0].contains("draft"), "line should contain status: {}", lines[0]);
-    assert!(lines[0].contains("task"), "line should contain type: {}", lines[0]);
-    assert!(lines[0].contains("Fix login bug"), "line should contain title: {}", lines[0]);
+    assert!(
+        lines[0].starts_with(&id),
+        "line should start with id: {}",
+        lines[0]
+    );
+    assert!(
+        lines[0].contains("draft"),
+        "line should contain status: {}",
+        lines[0]
+    );
+    assert!(
+        lines[0].contains("task"),
+        "line should contain type: {}",
+        lines[0]
+    );
+    assert!(
+        lines[0].contains("Fix login bug"),
+        "line should contain title: {}",
+        lines[0]
+    );
 }
 
 #[test]
@@ -168,7 +208,19 @@ fn list_sorted_by_status_then_created_at() {
     assert_eq!(lines.len(), 3);
 
     // in-progress first, then todo, then draft
-    assert!(lines[0].contains("Active ticket"), "first should be in-progress: {}", lines[0]);
-    assert!(lines[1].contains("Todo ticket"), "second should be todo: {}", lines[1]);
-    assert!(lines[2].contains("Draft ticket"), "third should be draft: {}", lines[2]);
+    assert!(
+        lines[0].contains("Active ticket"),
+        "first should be in-progress: {}",
+        lines[0]
+    );
+    assert!(
+        lines[1].contains("Todo ticket"),
+        "second should be todo: {}",
+        lines[1]
+    );
+    assert!(
+        lines[2].contains("Draft ticket"),
+        "third should be draft: {}",
+        lines[2]
+    );
 }

@@ -29,7 +29,14 @@ pub struct App {
 
 impl App {
     pub fn new(tickets: Vec<Ticket>, columns: Vec<String>) -> Self {
-        App { tickets, columns, col: 0, row: 0, screen: Screen::Board, flash: None }
+        App {
+            tickets,
+            columns,
+            col: 0,
+            row: 0,
+            screen: Screen::Board,
+            flash: None,
+        }
     }
 
     /// Indices into `self.tickets` for tickets belonging to column `col`.
@@ -209,10 +216,18 @@ pub fn update(app: &mut App, msg: Message) -> Cmd {
                 Cmd::None
             }
             Message::MoveTicketLeft => {
-                if app.move_ticket_left() { Cmd::SaveFocused } else { Cmd::None }
+                if app.move_ticket_left() {
+                    Cmd::SaveFocused
+                } else {
+                    Cmd::None
+                }
             }
             Message::MoveTicketRight => {
-                if app.move_ticket_right() { Cmd::SaveFocused } else { Cmd::None }
+                if app.move_ticket_right() {
+                    Cmd::SaveFocused
+                } else {
+                    Cmd::None
+                }
             }
             Message::OpenDetail => {
                 if app.focused_ticket().is_some() {
@@ -266,7 +281,11 @@ mod tests {
     }
 
     fn default_columns() -> Vec<String> {
-        vec!["todo".to_string(), "in-progress".to_string(), "done".to_string()]
+        vec![
+            "todo".to_string(),
+            "in-progress".to_string(),
+            "done".to_string(),
+        ]
     }
 
     // ── col_indices / grouping ─────────────────────────────────────────────
@@ -408,7 +427,10 @@ mod tests {
         let mut app = App::new(tickets, default_columns());
         update(&mut app, Message::MoveTicketRight);
         assert_eq!(app.col, 1);
-        assert_eq!(app.focused_ticket().unwrap().front_matter.id.to_string(), "a");
+        assert_eq!(
+            app.focused_ticket().unwrap().front_matter.id.to_string(),
+            "a"
+        );
     }
 
     #[test]

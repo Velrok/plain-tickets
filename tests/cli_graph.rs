@@ -6,7 +6,11 @@ fn graph_errors_when_not_initialised() {
     let out = common::tickets(&dir, &["graph"]);
     assert!(!out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("not initialised"), "unexpected stderr: {}", stderr);
+    assert!(
+        stderr.contains("not initialised"),
+        "unexpected stderr: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -29,7 +33,11 @@ fn graph_shows_single_ticket_as_root() {
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains(&id), "expected id in output: {}", stdout);
-    assert!(stdout.contains("Fix login bug"), "expected title: {}", stdout);
+    assert!(
+        stdout.contains("Fix login bug"),
+        "expected title: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -46,7 +54,11 @@ fn graph_with_id_shows_tree_rooted_at_ticket() {
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("Ticket B"), "expected Ticket B: {}", stdout);
-    assert!(stdout.contains("Ticket A"), "expected Ticket A as blocker: {}", stdout);
+    assert!(
+        stdout.contains("Ticket A"),
+        "expected Ticket A as blocker: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -62,9 +74,21 @@ fn graph_warns_on_dependency_cycle() {
     assert!(out.status.success(), "graph failed: {:?}", out);
 
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("dependency cycle"), "expected cycle warning: {}", stderr);
-    assert!(stderr.contains(&id_a), "expected id_a in warning: {}", stderr);
-    assert!(stderr.contains(&id_b), "expected id_b in warning: {}", stderr);
+    assert!(
+        stderr.contains("dependency cycle"),
+        "expected cycle warning: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains(&id_a),
+        "expected id_a in warning: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains(&id_b),
+        "expected id_b in warning: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -79,7 +103,11 @@ fn graph_acyclic_has_no_cycle_warning() {
     assert!(out.status.success(), "graph failed: {:?}", out);
 
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(!stderr.contains("dependency cycle"), "unexpected cycle warning: {}", stderr);
+    assert!(
+        !stderr.contains("dependency cycle"),
+        "unexpected cycle warning: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -97,8 +125,19 @@ fn graph_blocked_ticket_not_a_forest_root() {
     // Only A should appear as a root-level line (no leading whitespace/connector)
     let root_lines: Vec<&str> = stdout
         .lines()
-        .filter(|l| !l.starts_with(' ') && !l.starts_with('│') && !l.starts_with('├') && !l.starts_with('└'))
+        .filter(|l| {
+            !l.starts_with(' ') && !l.starts_with('│') && !l.starts_with('├') && !l.starts_with('└')
+        })
         .collect();
-    assert_eq!(root_lines.len(), 1, "expected 1 root, got: {:?}", root_lines);
-    assert!(root_lines[0].contains("Ticket A"), "root should be A: {:?}", root_lines);
+    assert_eq!(
+        root_lines.len(),
+        1,
+        "expected 1 root, got: {:?}",
+        root_lines
+    );
+    assert!(
+        root_lines[0].contains("Ticket A"),
+        "root should be A: {:?}",
+        root_lines
+    );
 }

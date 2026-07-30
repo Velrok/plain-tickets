@@ -203,24 +203,28 @@ fn load_tickets(working_dir: &WorkingDir) -> Result<Vec<Ticket>> {
 
 fn find_ticket_path(working_dir: &WorkingDir, ticket: &Ticket) -> Option<PathBuf> {
     let prefix = format!("{}_", ticket.front_matter.id);
-    std::fs::read_dir(working_dir.all()).ok()?.flatten().find_map(|e| {
-        if e.file_name().to_string_lossy().starts_with(&prefix) {
-            Some(e.path())
-        } else {
-            None
-        }
-    })
+    std::fs::read_dir(working_dir.all())
+        .ok()?
+        .flatten()
+        .find_map(|e| {
+            if e.file_name().to_string_lossy().starts_with(&prefix) {
+                Some(e.path())
+            } else {
+                None
+            }
+        })
 }
 
 fn create_draft_ticket(working_dir: &WorkingDir, status: TicketStatus) -> Result<PathBuf> {
     const ALPHA: [char; 36] = [
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
-        'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x',
-        'y', 'z',
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+        'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
     ];
     let id = TicketId::from(nanoid::nanoid!(6, &ALPHA));
     let now = chrono::Utc::now();
-    let title: Title = "new ticket".parse().map_err(|e: String| anyhow::anyhow!(e))?;
+    let title: Title = "new ticket"
+        .parse()
+        .map_err(|e: String| anyhow::anyhow!(e))?;
 
     let ticket = Ticket {
         front_matter: FrontMatter {
@@ -237,7 +241,9 @@ fn create_draft_ticket(working_dir: &WorkingDir, status: TicketStatus) -> Result
         body: String::new(),
     };
 
-    let path = working_dir.all().join(format!("{}_{}.md", id, title.slugify()));
+    let path = working_dir
+        .all()
+        .join(format!("{}_{}.md", id, title.slugify()));
     std::fs::write(&path, ticket.to_string())
         .with_context(|| format!("could not write {}", path.display()))?;
     Ok(path)
@@ -248,7 +254,9 @@ fn launch_editor(path: &Path) {
     let _ = std::process::Command::new(&editor).arg(path).status();
 }
 
-fn suspend<B: ratatui::backend::Backend + std::io::Write>(terminal: &mut Terminal<B>) -> Result<()> {
+fn suspend<B: ratatui::backend::Backend + std::io::Write>(
+    terminal: &mut Terminal<B>,
+) -> Result<()> {
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     Ok(())
@@ -277,23 +285,50 @@ mod tests {
 
     #[test]
     fn board_q_maps_to_quit() {
-        assert_eq!(key_to_message(KeyCode::Char('q'), &Screen::Board), Some(Message::Quit));
+        assert_eq!(
+            key_to_message(KeyCode::Char('q'), &Screen::Board),
+            Some(Message::Quit)
+        );
     }
 
     #[test]
     fn board_hjkl_map_to_navigation() {
-        assert_eq!(key_to_message(KeyCode::Char('h'), &Screen::Board), Some(Message::MoveLeft));
-        assert_eq!(key_to_message(KeyCode::Char('l'), &Screen::Board), Some(Message::MoveRight));
-        assert_eq!(key_to_message(KeyCode::Char('j'), &Screen::Board), Some(Message::MoveDown));
-        assert_eq!(key_to_message(KeyCode::Char('k'), &Screen::Board), Some(Message::MoveUp));
+        assert_eq!(
+            key_to_message(KeyCode::Char('h'), &Screen::Board),
+            Some(Message::MoveLeft)
+        );
+        assert_eq!(
+            key_to_message(KeyCode::Char('l'), &Screen::Board),
+            Some(Message::MoveRight)
+        );
+        assert_eq!(
+            key_to_message(KeyCode::Char('j'), &Screen::Board),
+            Some(Message::MoveDown)
+        );
+        assert_eq!(
+            key_to_message(KeyCode::Char('k'), &Screen::Board),
+            Some(Message::MoveUp)
+        );
     }
 
     #[test]
     fn board_arrows_map_to_navigation() {
-        assert_eq!(key_to_message(KeyCode::Left, &Screen::Board), Some(Message::MoveLeft));
-        assert_eq!(key_to_message(KeyCode::Right, &Screen::Board), Some(Message::MoveRight));
-        assert_eq!(key_to_message(KeyCode::Down, &Screen::Board), Some(Message::MoveDown));
-        assert_eq!(key_to_message(KeyCode::Up, &Screen::Board), Some(Message::MoveUp));
+        assert_eq!(
+            key_to_message(KeyCode::Left, &Screen::Board),
+            Some(Message::MoveLeft)
+        );
+        assert_eq!(
+            key_to_message(KeyCode::Right, &Screen::Board),
+            Some(Message::MoveRight)
+        );
+        assert_eq!(
+            key_to_message(KeyCode::Down, &Screen::Board),
+            Some(Message::MoveDown)
+        );
+        assert_eq!(
+            key_to_message(KeyCode::Up, &Screen::Board),
+            Some(Message::MoveUp)
+        );
     }
 
     #[test]
@@ -310,7 +345,10 @@ mod tests {
 
     #[test]
     fn board_enter_and_space_open_detail() {
-        assert_eq!(key_to_message(KeyCode::Enter, &Screen::Board), Some(Message::OpenDetail));
+        assert_eq!(
+            key_to_message(KeyCode::Enter, &Screen::Board),
+            Some(Message::OpenDetail)
+        );
         assert_eq!(
             key_to_message(KeyCode::Char(' '), &Screen::Board),
             Some(Message::OpenDetail)
@@ -323,7 +361,10 @@ mod tests {
             key_to_message(KeyCode::Char('?'), &Screen::Board),
             Some(Message::ToggleHelp)
         );
-        assert_eq!(key_to_message(KeyCode::F(1), &Screen::Board), Some(Message::ToggleHelp));
+        assert_eq!(
+            key_to_message(KeyCode::F(1), &Screen::Board),
+            Some(Message::ToggleHelp)
+        );
     }
 
     #[test]
@@ -332,7 +373,10 @@ mod tests {
             key_to_message(KeyCode::Char('q'), &Screen::Detail),
             Some(Message::CloseOverlay)
         );
-        assert_eq!(key_to_message(KeyCode::Esc, &Screen::Detail), Some(Message::CloseOverlay));
+        assert_eq!(
+            key_to_message(KeyCode::Esc, &Screen::Detail),
+            Some(Message::CloseOverlay)
+        );
     }
 
     #[test]
@@ -346,6 +390,9 @@ mod tests {
             key_to_message(KeyCode::Char('a'), &Screen::Help),
             Some(Message::CloseOverlay)
         );
-        assert_eq!(key_to_message(KeyCode::Esc, &Screen::Help), Some(Message::CloseOverlay));
+        assert_eq!(
+            key_to_message(KeyCode::Esc, &Screen::Help),
+            Some(Message::CloseOverlay)
+        );
     }
 }

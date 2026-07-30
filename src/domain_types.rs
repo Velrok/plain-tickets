@@ -327,8 +327,8 @@ impl std::str::FromStr for Ticket {
             .ok_or_else(|| "missing front matter closing delimiter".to_string())?;
         let yaml = &s[..end];
         let body = s[end + 5..].trim_start_matches('\n').to_string();
-        let front_matter: FrontMatter = serde_yaml::from_str(yaml)
-            .map_err(|e| format!("invalid front matter: {e}"))?;
+        let front_matter: FrontMatter =
+            serde_yaml::from_str(yaml).map_err(|e| format!("invalid front matter: {e}"))?;
         Ok(Ticket { front_matter, body })
     }
 }

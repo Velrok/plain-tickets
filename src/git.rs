@@ -21,8 +21,16 @@ fn git_commit_impl(repo_root: &Path, file: &Path, message: &str, silent: bool) -
     let add = Command::new("git")
         .current_dir(repo_root)
         .args(["add", "--", &file_s])
-        .stdout(if silent { std::process::Stdio::null() } else { std::process::Stdio::inherit() })
-        .stderr(if silent { std::process::Stdio::null() } else { std::process::Stdio::inherit() })
+        .stdout(if silent {
+            std::process::Stdio::null()
+        } else {
+            std::process::Stdio::inherit()
+        })
+        .stderr(if silent {
+            std::process::Stdio::null()
+        } else {
+            std::process::Stdio::inherit()
+        })
         .status()
         .map_err(|e| anyhow::anyhow!("failed to run git add: {e}"))?;
 
@@ -33,8 +41,16 @@ fn git_commit_impl(repo_root: &Path, file: &Path, message: &str, silent: bool) -
     let commit = Command::new("git")
         .current_dir(repo_root)
         .args(["commit", "-m", message])
-        .stdout(if silent { std::process::Stdio::null() } else { std::process::Stdio::inherit() })
-        .stderr(if silent { std::process::Stdio::null() } else { std::process::Stdio::inherit() })
+        .stdout(if silent {
+            std::process::Stdio::null()
+        } else {
+            std::process::Stdio::inherit()
+        })
+        .stderr(if silent {
+            std::process::Stdio::null()
+        } else {
+            std::process::Stdio::inherit()
+        })
         .status()
         .map_err(|e| anyhow::anyhow!("failed to run git commit: {e}"))?;
 
@@ -88,9 +104,21 @@ mod tests {
     }
 
     fn init_git_repo(dir: &Path) {
-        Command::new("git").args(["init"]).current_dir(dir).status().unwrap();
-        Command::new("git").args(["config", "user.email", "test@example.com"]).current_dir(dir).status().unwrap();
-        Command::new("git").args(["config", "user.name", "Test"]).current_dir(dir).status().unwrap();
+        Command::new("git")
+            .args(["init"])
+            .current_dir(dir)
+            .status()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.email", "test@example.com"])
+            .current_dir(dir)
+            .status()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(dir)
+            .status()
+            .unwrap();
     }
 
     #[test]
@@ -112,7 +140,10 @@ mod tests {
         let rel = PathBuf::from("tickets/archived/abc123_some-ticket.md");
 
         let result = git_commit(&repo, &rel, "tickets: archive abc123");
-        assert!(result.is_ok(), "git_commit failed: {:?}", result.unwrap_err());
+        assert!(
+            result.is_ok(),
+            "git_commit failed: {:?}",
+            result.unwrap_err()
+        );
     }
-
 }

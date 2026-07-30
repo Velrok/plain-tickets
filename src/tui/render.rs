@@ -44,8 +44,11 @@ fn draw_board(f: &mut Frame, app: &App) {
 
     // Columns
     let col_count = app.columns.len() as u32;
-    let constraints: Vec<Constraint> =
-        app.columns.iter().map(|_| Constraint::Ratio(1, col_count)).collect();
+    let constraints: Vec<Constraint> = app
+        .columns
+        .iter()
+        .map(|_| Constraint::Ratio(1, col_count))
+        .collect();
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(constraints)
@@ -55,7 +58,11 @@ fn draw_board(f: &mut Frame, app: &App) {
         let chunk = chunks[col_idx];
         let is_focused = col_idx == app.col;
 
-        let cards_area = Rect { y: chunk.y + 1, height: chunk.height.saturating_sub(1), ..chunk };
+        let cards_area = Rect {
+            y: chunk.y + 1,
+            height: chunk.height.saturating_sub(1),
+            ..chunk
+        };
         let indices = app.col_indices(col_idx);
 
         // Compute scroll offset: keep focused card visible in focused column.
@@ -124,8 +131,14 @@ fn draw_detail(f: &mut Frame, app: &App) {
         let ids: Vec<String> = fm.blocked_by.iter().map(|t| t.to_string()).collect();
         lines.push(Line::from(format!("Blocked: {}", ids.join(", "))));
     }
-    lines.push(Line::from(format!("Created: {}", fm.created_at.format("%Y-%m-%d"))));
-    lines.push(Line::from(format!("Updated: {}", fm.updated_at.format("%Y-%m-%d"))));
+    lines.push(Line::from(format!(
+        "Created: {}",
+        fm.created_at.format("%Y-%m-%d")
+    )));
+    lines.push(Line::from(format!(
+        "Updated: {}",
+        fm.updated_at.format("%Y-%m-%d")
+    )));
 
     if !ticket.body.is_empty() {
         lines.push(Line::from(""));
@@ -137,7 +150,9 @@ fn draw_detail(f: &mut Frame, app: &App) {
     let block = Block::default()
         .title("  Detail    e edit    q/Esc back  ")
         .borders(Borders::ALL);
-    let para = Paragraph::new(Text::from(lines)).block(block).wrap(Wrap { trim: false });
+    let para = Paragraph::new(Text::from(lines))
+        .block(block)
+        .wrap(Wrap { trim: false });
 
     f.render_widget(Clear, area);
     f.render_widget(para, area);
@@ -234,7 +249,12 @@ fn draw_cards(
             break;
         }
 
-        let card_area = Rect { x: inner.x, y, width: card_width, height: card_height };
+        let card_area = Rect {
+            x: inner.x,
+            y,
+            width: card_width,
+            height: card_height,
+        };
 
         let is_focused = is_focused_col && row_idx == app.row;
         let border_style = if is_focused {
@@ -262,8 +282,7 @@ fn draw_cards(
             block = block.title_bottom(Line::from(tag_spans).right_aligned());
         }
 
-        let content: Vec<Line> =
-            title_lines.into_iter().map(|l| Line::from(l)).collect();
+        let content: Vec<Line> = title_lines.into_iter().map(|l| Line::from(l)).collect();
         let para = Paragraph::new(Text::from(content)).block(block);
         f.render_widget(para, card_area);
 
@@ -303,10 +322,10 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
 fn type_span(t: &TicketType) -> Span<'static> {
     // Emoji are 2-wide; ratatui measures via unicode-width so layout is correct.
     match t {
-        TicketType::Epic  => Span::raw("🌟"),
+        TicketType::Epic => Span::raw("🌟"),
         TicketType::Story => Span::raw("📖"),
-        TicketType::Task  => Span::raw("📋"),
-        TicketType::Bug   => Span::raw("🐛"),
+        TicketType::Task => Span::raw("📋"),
+        TicketType::Bug => Span::raw("🐛"),
     }
 }
 
@@ -432,8 +451,16 @@ mod tests {
         let mut app = App::new(tickets, columns);
         app.row = 2; // focus on 3rd card
         let output = render_to_string(&app, 30, 10);
-        assert!(output.contains("ccc333"), "focused card not visible: {}", output);
-        assert!(!output.contains("aaa111"), "first card should be scrolled off: {}", output);
+        assert!(
+            output.contains("ccc333"),
+            "focused card not visible: {}",
+            output
+        );
+        assert!(
+            !output.contains("aaa111"),
+            "first card should be scrolled off: {}",
+            output
+        );
     }
 
     #[test]
@@ -502,7 +529,12 @@ mod tests {
     #[test]
     fn board_card_footer_shows_tags() {
         let columns = vec!["todo".to_string()];
-        let tickets = vec![make_ticket_with_tags("abc123", "Fix login bug", TicketStatus::Todo, &["tui", "config"])];
+        let tickets = vec![make_ticket_with_tags(
+            "abc123",
+            "Fix login bug",
+            TicketStatus::Todo,
+            &["tui", "config"],
+        )];
         let app = App::new(tickets, columns);
         let output = render_to_string(&app, 30, 10);
         insta::assert_snapshot!(output);
@@ -511,7 +543,11 @@ mod tests {
     #[test]
     fn board_card_wraps_long_title() {
         let columns = vec!["todo".to_string()];
-        let tickets = vec![make_ticket("abc123", "Fix the login bug on the home page", TicketStatus::Todo)];
+        let tickets = vec![make_ticket(
+            "abc123",
+            "Fix the login bug on the home page",
+            TicketStatus::Todo,
+        )];
         let app = App::new(tickets, columns);
         let output = render_to_string(&app, 30, 12);
         insta::assert_snapshot!(output);
@@ -523,7 +559,11 @@ mod tests {
         let tickets = vec![
             make_ticket("aaa111", "First ticket", TicketStatus::Todo),
             make_ticket("bbb222", "Second ticket", TicketStatus::Todo),
-            make_ticket("ccc333", "Third ticket should not appear", TicketStatus::Todo),
+            make_ticket(
+                "ccc333",
+                "Third ticket should not appear",
+                TicketStatus::Todo,
+            ),
         ];
         let app = App::new(tickets, columns);
         // height=10: outer column borders (2) + 3 cards × 3 lines = 11 → third card clips
@@ -533,7 +573,11 @@ mod tests {
 
     #[test]
     fn board_renders_three_columns() {
-        let columns = vec!["todo".to_string(), "in-progress".to_string(), "done".to_string()];
+        let columns = vec![
+            "todo".to_string(),
+            "in-progress".to_string(),
+            "done".to_string(),
+        ];
         let tickets = vec![
             make_ticket("aaa111", "Fix login bug", TicketStatus::Todo),
             make_ticket("bbb222", "Add search", TicketStatus::InProgress),
@@ -545,7 +589,11 @@ mod tests {
 
     #[test]
     fn detail_view_renders_ticket_fields() {
-        let columns = vec!["todo".to_string(), "in-progress".to_string(), "done".to_string()];
+        let columns = vec![
+            "todo".to_string(),
+            "in-progress".to_string(),
+            "done".to_string(),
+        ];
         let tickets = vec![make_ticket("abc123", "Fix login bug", TicketStatus::Todo)];
         let mut app = App::new(tickets, columns);
         app.screen = Screen::Detail;
@@ -555,7 +603,11 @@ mod tests {
 
     #[test]
     fn help_overlay_renders_keybindings() {
-        let columns = vec!["todo".to_string(), "in-progress".to_string(), "done".to_string()];
+        let columns = vec![
+            "todo".to_string(),
+            "in-progress".to_string(),
+            "done".to_string(),
+        ];
         let mut app = App::new(vec![], columns);
         app.screen = Screen::Help;
         let output = render_to_string(&app, 80, 24);

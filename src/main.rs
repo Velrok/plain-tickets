@@ -12,7 +12,9 @@ mod graph;
 mod tui;
 
 use application_types::{ArchiveArgs, EditArgs, ListArgs, NewArgs, WorkingDir};
-use commands::{cmd_archive, cmd_edit, cmd_graph, cmd_init, cmd_list, cmd_new, cmd_show, resolve_dir};
+use commands::{
+    cmd_archive, cmd_edit, cmd_graph, cmd_init, cmd_list, cmd_new, cmd_show, resolve_dir,
+};
 use domain_types::TicketId;
 
 #[derive(Parser)]
@@ -29,14 +31,18 @@ struct Cli {
 enum Commands {
     Archive(ArchiveArgs),
     /// Show dependency graph. No ID = full forest; with ID = tree rooted at that ticket.
-    Graph { id: Option<TicketId> },
+    Graph {
+        id: Option<TicketId>,
+    },
     Init {
         /// Overwrite an existing .tickets.toml, backfilling any missing keys
         #[arg(long)]
         force: bool,
     },
     List(ListArgs),
-    Show { id: TicketId },
+    Show {
+        id: TicketId,
+    },
     Edit(EditArgs),
     New(NewArgs),
 }

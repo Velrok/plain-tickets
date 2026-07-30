@@ -16,8 +16,14 @@ fn archive_single_id_moves_file() {
     let (id, filename) = common::create_ticket(&dir, "Move me");
     let out = common::tickets(&dir, &["archive", &id]);
     assert!(out.status.success(), "archive failed: {:?}", out);
-    assert!(!dir.join("all").join(&filename).exists(), "file still in all/");
-    assert!(dir.join("archived").join(&filename).exists(), "file not in archived/");
+    assert!(
+        !dir.join("all").join(&filename).exists(),
+        "file still in all/"
+    );
+    assert!(
+        dir.join("archived").join(&filename).exists(),
+        "file not in archived/"
+    );
 }
 
 #[test]
@@ -38,10 +44,19 @@ fn archive_unknown_id_errors_no_files_moved() {
     let out = common::tickets(&dir, &["archive", &id, "xxxxxx"]);
     assert!(!out.status.success(), "expected failure");
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("xxxxxx"), "expected failing id in stderr: {stderr}");
-    assert!(stderr.contains("no files moved"), "expected no files moved: {stderr}");
+    assert!(
+        stderr.contains("xxxxxx"),
+        "expected failing id in stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("no files moved"),
+        "expected no files moved: {stderr}"
+    );
     // original file untouched
-    assert!(dir.join("all").join(&filename).exists(), "file was moved despite error");
+    assert!(
+        dir.join("all").join(&filename).exists(),
+        "file was moved despite error"
+    );
 }
 
 #[test]
@@ -65,7 +80,10 @@ fn archive_success_output_format() {
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains(&id), "id missing from output: {stdout}");
-    assert!(stdout.contains("archived"), "word 'archived' missing: {stdout}");
+    assert!(
+        stdout.contains("archived"),
+        "word 'archived' missing: {stdout}"
+    );
 }
 
 #[test]

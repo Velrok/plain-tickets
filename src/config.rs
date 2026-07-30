@@ -33,13 +33,19 @@ pub struct TuiConfig {
 
 impl TuiConfig {
     fn default_kanban_columns() -> Vec<String> {
-        vec!["todo".to_string(), "in-progress".to_string(), "done".to_string()]
+        vec![
+            "todo".to_string(),
+            "in-progress".to_string(),
+            "done".to_string(),
+        ]
     }
 }
 
 impl Default for TuiConfig {
     fn default() -> Self {
-        Self { kanban_columns: Self::default_kanban_columns() }
+        Self {
+            kanban_columns: Self::default_kanban_columns(),
+        }
     }
 }
 
@@ -55,10 +61,8 @@ pub fn load(dir: &Path) -> Result<Config> {
     if !path.exists() {
         return Ok(Config::default());
     }
-    let content = std::fs::read_to_string(&path)
-        .context("failed to read .tickets.toml")?;
-    toml::from_str(&content)
-        .context("invalid .tickets.toml")
+    let content = std::fs::read_to_string(&path).context("failed to read .tickets.toml")?;
+    toml::from_str(&content).context("invalid .tickets.toml")
 }
 
 #[cfg(test)]
@@ -96,7 +100,10 @@ mod tests {
         let dir = tmp_dir("invalid_toml");
         fs::write(dir.join(".tickets.toml"), "not toml :::").unwrap();
         let err = load(&dir).unwrap_err();
-        assert!(!err.to_string().is_empty(), "expected error, got empty: {err}");
+        assert!(
+            !err.to_string().is_empty(),
+            "expected error, got empty: {err}"
+        );
     }
 
     #[test]
@@ -123,6 +130,9 @@ mod tests {
         let dir = tmp_dir("unknown_field");
         fs::write(dir.join(".tickets.toml"), "[git]\nunknown_key = true\n").unwrap();
         let err = load(&dir).unwrap_err();
-        assert!(!err.to_string().is_empty(), "expected error, got empty: {err}");
+        assert!(
+            !err.to_string().is_empty(),
+            "expected error, got empty: {err}"
+        );
     }
 }

@@ -16,9 +16,21 @@ fn tickets(dir: &Path, args: &[&str]) -> std::process::Output {
 }
 
 fn init_git_repo(dir: &std::path::Path) {
-    Command::new("git").args(["init"]).current_dir(dir).status().unwrap();
-    Command::new("git").args(["config", "user.email", "test@example.com"]).current_dir(dir).status().unwrap();
-    Command::new("git").args(["config", "user.name", "Test"]).current_dir(dir).status().unwrap();
+    Command::new("git")
+        .args(["init"])
+        .current_dir(dir)
+        .status()
+        .unwrap();
+    Command::new("git")
+        .args(["config", "user.email", "test@example.com"])
+        .current_dir(dir)
+        .status()
+        .unwrap();
+    Command::new("git")
+        .args(["config", "user.name", "Test"])
+        .current_dir(dir)
+        .status()
+        .unwrap();
 }
 
 fn git_log_count(dir: &std::path::Path) -> usize {
@@ -63,8 +75,14 @@ fn new_auto_commits_when_enabled() {
         .output()
         .unwrap();
     let msg = String::from_utf8_lossy(&log.stdout);
-    assert!(msg.contains("tickets: new"), "unexpected commit message: {msg}");
-    assert!(msg.contains("Test ticket"), "commit message missing title: {msg}");
+    assert!(
+        msg.contains("tickets: new"),
+        "unexpected commit message: {msg}"
+    );
+    assert!(
+        msg.contains("Test ticket"),
+        "commit message missing title: {msg}"
+    );
 }
 
 #[test]
@@ -76,7 +94,11 @@ fn new_no_commit_when_disabled() {
 
     let out = tickets(&dir, &["new", "--title", "Silent ticket"]);
     assert!(out.status.success(), "new failed: {:?}", out);
-    assert_eq!(git_log_count(&dir), 0, "expected no commits when auto_commit = false");
+    assert_eq!(
+        git_log_count(&dir),
+        0,
+        "expected no commits when auto_commit = false"
+    );
 }
 
 #[test]
@@ -103,7 +125,10 @@ fn edit_auto_commits_when_enabled() {
         .output()
         .unwrap();
     let msg = String::from_utf8_lossy(&log.stdout);
-    assert!(msg.contains("tickets: edit"), "unexpected commit message: {msg}");
+    assert!(
+        msg.contains("tickets: edit"),
+        "unexpected commit message: {msg}"
+    );
 }
 
 #[test]
@@ -117,19 +142,38 @@ fn archive_auto_commits_when_enabled() {
     let new_out = tickets(&dir, &["new", "--title", "Archive me"]);
     assert!(new_out.status.success());
     let stdout = String::from_utf8_lossy(&new_out.stdout);
-    let id = stdout.trim().lines().last().unwrap().split_whitespace().next().unwrap().to_string();
+    let id = stdout
+        .trim()
+        .lines()
+        .last()
+        .unwrap()
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string();
 
     let arc_out = tickets(&dir, &["archive", &id]);
     assert!(arc_out.status.success(), "archive failed: {:?}", arc_out);
     assert_eq!(git_log_count(&dir), 2, "expected 2 commits (new + archive)");
 
     let msg = git_log_last(&dir);
-    assert!(msg.contains("tickets: archive"), "unexpected commit message: {msg}");
+    assert!(
+        msg.contains("tickets: archive"),
+        "unexpected commit message: {msg}"
+    );
 }
 
 fn git_commit_all(dir: &std::path::Path, message: &str) {
-    Command::new("git").args(["add", "-A"]).current_dir(dir).status().unwrap();
-    Command::new("git").args(["commit", "-m", message]).current_dir(dir).status().unwrap();
+    Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(dir)
+        .status()
+        .unwrap();
+    Command::new("git")
+        .args(["commit", "-m", message])
+        .current_dir(dir)
+        .status()
+        .unwrap();
 }
 
 fn git_is_clean(dir: &std::path::Path) -> bool {
@@ -152,14 +196,29 @@ fn archive_by_id_auto_commit_leaves_clean_working_tree() {
     git_commit_all(&dir, "chore: init");
 
     let new_out = tickets(&dir, &["new", "--title", "Clean tree"]);
-    assert!(new_out.status.success(), "new failed: {}", String::from_utf8_lossy(&new_out.stderr));
+    assert!(
+        new_out.status.success(),
+        "new failed: {}",
+        String::from_utf8_lossy(&new_out.stderr)
+    );
     let stdout = String::from_utf8_lossy(&new_out.stdout);
-    let id = stdout.trim().lines().last().unwrap().split_whitespace().next().unwrap().to_string();
+    let id = stdout
+        .trim()
+        .lines()
+        .last()
+        .unwrap()
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string();
 
     let arc_out = tickets(&dir, &["archive", &id]);
     assert!(arc_out.status.success(), "archive failed: {:?}", arc_out);
 
-    assert!(git_is_clean(&dir), "working tree is dirty after archive — deletion of all/ file was not committed");
+    assert!(
+        git_is_clean(&dir),
+        "working tree is dirty after archive — deletion of all/ file was not committed"
+    );
 }
 
 #[test]
@@ -171,11 +230,21 @@ fn archive_all_rejected_auto_commit_leaves_clean_working_tree() {
     enable_auto_commit(&dir);
     git_commit_all(&dir, "chore: init");
 
-    let new_out = tickets(&dir, &["new", "--title", "Reject me", "--status", "rejected"]);
+    let new_out = tickets(
+        &dir,
+        &["new", "--title", "Reject me", "--status", "rejected"],
+    );
     assert!(new_out.status.success());
 
     let arc_out = tickets(&dir, &["archive", "--all-rejected"]);
-    assert!(arc_out.status.success(), "archive --all-rejected failed: {:?}", arc_out);
+    assert!(
+        arc_out.status.success(),
+        "archive --all-rejected failed: {:?}",
+        arc_out
+    );
 
-    assert!(git_is_clean(&dir), "working tree is dirty after --all-rejected archive — deletion of all/ file was not committed");
+    assert!(
+        git_is_clean(&dir),
+        "working tree is dirty after --all-rejected archive — deletion of all/ file was not committed"
+    );
 }

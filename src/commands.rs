@@ -8,8 +8,8 @@ use crate::application_types::{ArchiveArgs, EditArgs, ListArgs, NewArgs, Working
 use crate::config;
 use crate::config::Config;
 use crate::domain_types::{FrontMatter, Tag, Ticket, TicketId, TicketStatus, TicketType};
-use crate::graph::{DepGraph, render_forest, render_tree};
 use crate::git;
+use crate::graph::{DepGraph, render_forest, render_tree};
 
 pub fn resolve_dir(flag: Option<PathBuf>) -> PathBuf {
     flag.or_else(|| std::env::var("TICKETS_DIR").ok().map(PathBuf::from))
@@ -28,11 +28,14 @@ pub fn cmd_init(base: PathBuf, force: bool) -> Result<()> {
     } else {
         Config::default()
     };
-    let config_content =
-        toml::to_string_pretty(&cfg).context("failed to serialise config")?;
+    let config_content = toml::to_string_pretty(&cfg).context("failed to serialise config")?;
     std::fs::write(&config_path, config_content)
         .with_context(|| format!("could not write {}", config_path.display()))?;
-    println!("  {} {}", if already_exists { "rewrote" } else { "created" }, config_path.display());
+    println!(
+        "  {} {}",
+        if already_exists { "rewrote" } else { "created" },
+        config_path.display()
+    );
 
     if git_detect(&base).is_ok() {
         println!(
@@ -68,7 +71,10 @@ pub fn cmd_graph(dir: WorkingDir, id: Option<TicketId>) -> Result<()> {
     if !cyclic.is_empty() {
         let mut ids: Vec<String> = cyclic.iter().map(ToString::to_string).collect();
         ids.sort();
-        eprintln!("warning: dependency cycle detected among: {}", ids.join(", "));
+        eprintln!(
+            "warning: dependency cycle detected among: {}",
+            ids.join(", ")
+        );
     }
     Ok(())
 }
@@ -209,14 +215,20 @@ fn print_body(body: &str) -> Result<()> {
     Ok(())
 }
 
-fn matches_filters(ticket: &Ticket, statuses: &[TicketStatus], types: &[TicketType], tags: &[Tag]) -> bool {
+fn matches_filters(
+    ticket: &Ticket,
+    statuses: &[TicketStatus],
+    types: &[TicketType],
+    tags: &[Tag],
+) -> bool {
     if !statuses.is_empty() && !statuses.contains(&ticket.front_matter.status) {
         return false;
     }
     if !types.is_empty() && !types.contains(&ticket.front_matter.r#type) {
         return false;
     }
-    tags.iter().all(|tag| ticket.front_matter.tags.contains(tag))
+    tags.iter()
+        .all(|tag| ticket.front_matter.tags.contains(tag))
 }
 
 pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
@@ -506,8 +518,19 @@ mod tests {
         let dir = tmp_dir("init_scaffold_keys");
         cmd_init(dir.clone(), false).unwrap();
         let content = fs::read_to_string(dir.join(".tickets.toml")).unwrap();
-        for expected in ["[git]", "auto_commit", "[tui]", "kanban_columns", "[new]", "default_status", "default_type"] {
-            assert!(content.contains(expected), "expected scaffold to contain {expected:?}, got:\n{content}");
+        for expected in [
+            "[git]",
+            "auto_commit",
+            "[tui]",
+            "kanban_columns",
+            "[new]",
+            "default_status",
+            "default_type",
+        ] {
+            assert!(
+                content.contains(expected),
+                "expected scaffold to contain {expected:?}, got:\n{content}"
+            );
         }
     }
 }
