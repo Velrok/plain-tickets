@@ -5,6 +5,7 @@ use anyhow::{Context as _, Result, bail};
 use chrono::{DateTime, Utc};
 
 use crate::application_types::{ArchiveArgs, EditArgs, ListArgs, NewArgs, WorkingDir};
+use crate::config;
 use crate::config::Config;
 use crate::domain_types::{FrontMatter, Tag, Ticket, TicketId, TicketStatus, TicketType};
 use crate::graph::{DepGraph, render_forest, render_tree};
@@ -15,26 +16,23 @@ pub fn resolve_dir(flag: Option<PathBuf>) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("tickets"))
 }
 
-pub fn cmd_init(base: PathBuf) -> Result<()> {
+pub fn cmd_init(base: PathBuf, force: bool) -> Result<()> {
     let config_path = base.join(".tickets.toml");
-    if config_path.exists() {
+    let already_exists = config_path.exists();
+    if already_exists && !force {
         bail!("already initialised — .tickets.toml already exists");
     }
     init_directories(&base)?;
-    let config_content = "\
-# plain-tickets configuration
-# Uncomment and set values to override defaults.
-
-# [git]
-# auto_commit = false
-
-# [new]
-# default_status = \"draft\"
-# default_type = \"task\"
-";
+    let cfg = if already_exists {
+        config::load(&base)?
+    } else {
+        Config::default()
+    };
+    let config_content =
+        toml::to_string_pretty(&cfg).context("failed to serialise config")?;
     std::fs::write(&config_path, config_content)
-        .with_context(|| format!("could not create {}", config_path.display()))?;
-    println!("  created {}", config_path.display());
+        .with_context(|| format!("could not write {}", config_path.display()))?;
+    println!("  {} {}", if already_exists { "rewrote" } else { "created" }, config_path.display());
 
     if git_detect(&base).is_ok() {
         println!(
@@ -78,12 +76,8 @@ pub fn cmd_new(dir: WorkingDir, cfg: &Config, args: NewArgs) -> Result<()> {
     let id = TicketId::from(nanoid::nanoid!(6, &ALPHA));
     let now = Utc::now();
 
-    let ticket_type = args.r#type
-        .or_else(|| cfg.new.default_type.as_ref().cloned())
-        .unwrap_or(TicketType::Task);
-    let status = args.status
-        .or_else(|| cfg.new.default_status.as_ref().cloned())
-        .unwrap_or(TicketStatus::Draft);
+    let ticket_type = args.r#type.unwrap_or(cfg.new.default_type.clone());
+    let status = args.status.unwrap_or(cfg.new.default_status.clone());
 
     let front_matter = FrontMatter {
         id: id.clone(),
@@ -477,4 +471,36 @@ fn init_directories(dir: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn tmp_dir(name: &str) -> PathBuf {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join(".testing")
+            .join(format!("commands_{name}"));
+        let _ = fs::remove_dir_all(&dir);
+        dir
+    }
+
+    #[test]
+    fn init_scaffold_round_trips_to_default_config() {
+        let dir = tmp_dir("init_round_trip");
+        cmd_init(dir.clone(), false).unwrap();
+        let loaded = crate::config::load(&dir).unwrap();
+        assert_eq!(loaded, crate::config::Config::default());
+    }
+
+    #[test]
+    fn init_scaffold_lists_every_config_key() {
+        let dir = tmp_dir("init_scaffold_keys");
+        cmd_init(dir.clone(), false).unwrap();
+        let content = fs::read_to_string(dir.join(".tickets.toml")).unwrap();
+        for expected in ["[git]", "auto_commit", "[tui]", "kanban_columns", "[new]", "default_status", "default_type"] {
+            assert!(content.contains(expected), "expected scaffold to contain {expected:?}, got:\n{content}");
+        }
+    }
 }

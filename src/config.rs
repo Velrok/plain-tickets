@@ -4,7 +4,7 @@ use anyhow::{Context as _, Result};
 
 use crate::domain_types::{TicketStatus, TicketType};
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default)]
@@ -15,14 +15,16 @@ pub struct Config {
     pub new: NewConfig,
 }
 
-#[derive(Debug, Default, serde::Deserialize)]
+#[derive(Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NewConfig {
-    pub default_status: Option<TicketStatus>,
-    pub default_type: Option<TicketType>,
+    #[serde(default)]
+    pub default_status: TicketStatus,
+    #[serde(default)]
+    pub default_type: TicketType,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TuiConfig {
     #[serde(default = "TuiConfig::default_kanban_columns")]
@@ -41,23 +43,11 @@ impl Default for TuiConfig {
     }
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GitConfig {
     #[serde(default)]
     pub auto_commit: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self { git: GitConfig::default(), tui: TuiConfig::default(), new: NewConfig::default() }
-    }
-}
-
-impl Default for GitConfig {
-    fn default() -> Self {
-        Self { auto_commit: false }
-    }
 }
 
 pub fn load(dir: &Path) -> Result<Config> {

@@ -30,7 +30,11 @@ enum Commands {
     Archive(ArchiveArgs),
     /// Show dependency graph. No ID = full forest; with ID = tree rooted at that ticket.
     Graph { id: Option<TicketId> },
-    Init,
+    Init {
+        /// Overwrite an existing .tickets.toml, backfilling any missing keys
+        #[arg(long)]
+        force: bool,
+    },
     List(ListArgs),
     Show { id: TicketId },
     Edit(EditArgs),
@@ -54,12 +58,12 @@ fn run() -> Result<()> {
             let cfg = config::load(working_dir.as_ref())?;
             tui::run(working_dir, &cfg)
         }
-        Some(Commands::Init) => cmd_init(base_dir),
+        Some(Commands::Init { force }) => cmd_init(base_dir, force),
         Some(cmd) => {
             let working_dir = WorkingDir::new(base_dir)?;
             let cfg = config::load(working_dir.as_ref())?;
             match cmd {
-                Commands::Init => unreachable!(),
+                Commands::Init { .. } => unreachable!(),
                 Commands::Archive(args) => cmd_archive(working_dir, &cfg, args),
                 Commands::Graph { id } => cmd_graph(working_dir, id),
                 Commands::List(args) => cmd_list(working_dir, &cfg, args),

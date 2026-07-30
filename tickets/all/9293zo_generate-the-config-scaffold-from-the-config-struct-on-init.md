@@ -97,3 +97,13 @@ Init { #[arg(long)] force: bool },
 - `init` still never calls `git::git_commit`, regardless of `--force` or `auto_commit`.
 - `--force` with no existing file: behaves exactly like plain `init`, prints `created`. `--force` overwriting an existing file: prints `rewrote` instead, so the overwrite is visible in output.
 - Test coverage for `--force` lives at the CLI level in `tests/cli_init.rs` (spawns the real binary), not just `commands.rs` unit tests — matches that file's existing style and behaviors are user-facing.
+
+## Implementation
+
+Shipped as designed above, via TDD:
+
+- `src/config.rs`: `NewConfig` fields non-`Option` + `#[serde(default)]`; `Config`/`GitConfig`/`TuiConfig`/`NewConfig` gained `Serialize`, `PartialEq`, `Debug`; `Config`/`GitConfig` now `#[derive(Default)]`.
+- `src/commands.rs`: `cmd_init(base, force)` writes `toml::to_string_pretty(&cfg)` — `Config::default()` on a fresh init, `config::load`'d existing config under `--force`; prints `created`/`rewrote`.
+- `src/main.rs`: `Commands::Init { force: bool }`.
+- Tests: `commands::tests` (round-trip, every-key-present) + `tests/cli_init.rs` (force preserves values, force bails untouched on invalid config, force-with-nothing-existing).
+- Full suite green except a pre-existing, unrelated date-flaky snapshot test (`detail_view_renders_ticket_fields`), confirmed failing identically on `main` before this work.
