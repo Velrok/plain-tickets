@@ -61,14 +61,14 @@ jobs:
         shell: bash
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf ${{ github.workspace }}/${{ matrix.asset_name }}.tar.gz ${{ env.BIN_NAME }}
+          tar czf "${{ github.workspace }}/${{ matrix.asset_name }}.tar.gz" ${{ env.BIN_NAME }}
 
       - name: Package (zip)
         if: matrix.archive == 'zip'
         shell: bash
         run: |
           cd target/${{ matrix.target }}/release
-          7z a ${{ github.workspace }}/${{ matrix.asset_name }}.zip ${{ env.BIN_NAME }}.exe
+          7z a "${{ github.workspace }}/${{ matrix.asset_name }}.zip" ${{ env.BIN_NAME }}.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
