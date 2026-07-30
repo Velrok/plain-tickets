@@ -50,7 +50,11 @@ rm -f Cargo.toml.bak
 cargo build >/dev/null # refresh Cargo.lock
 
 git add Cargo.toml Cargo.lock
-git commit -m "chore: release $tag"
+if git diff --cached --quiet; then
+  echo "==> Cargo.toml already at $version, nothing to commit"
+else
+  git commit -m "chore: release $tag"
+fi
 git tag -a "$tag" -m "$tag"
 
 read -r -p "Push commit and tag $tag to origin? [y/N] " confirm
