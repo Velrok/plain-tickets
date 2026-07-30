@@ -18,7 +18,11 @@ use commands::{
 use domain_types::TicketId;
 
 #[derive(Parser)]
-#[command(name = "tickets", about = "Plain markdown ticket system")]
+#[command(
+    name = "tickets",
+    about = "Plain markdown ticket system",
+    version = env!("TICKETS_VERSION_STRING")
+)]
 struct Cli {
     /// Override the tickets directory (takes precedence over TICKETS_DIR)
     #[arg(long, global = true)]

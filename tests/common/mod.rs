@@ -12,6 +12,7 @@ pub fn bin() -> PathBuf {
 
 /// Create an isolated test directory under `.testing/<name>/`.
 /// Any previous run is wiped first.
+#[allow(dead_code)]
 pub fn test_dir(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join(".testing")
