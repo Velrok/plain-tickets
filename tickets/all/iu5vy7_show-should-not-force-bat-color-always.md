@@ -2,13 +2,13 @@
 id: iu5vy7
 title: show should not force bat color always
 type: bug
-status: todo
+status: done
 tags:
 - cli
 parent: null
 blocked_by: []
 created_at: 2026-07-30T17:48:32.422700Z
-updated_at: 2026-07-30T17:48:32.422700Z
+updated_at: 2026-07-30T19:14:07.764641Z
 ---
 
 ## Problem
