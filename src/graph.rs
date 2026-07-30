@@ -202,10 +202,10 @@ fn load_dir(dir: &Path) -> Result<HashMap<TicketId, Ticket>> {
         if path.extension().and_then(|s| s.to_str()) != Some("md") {
             continue;
         }
-        if let Ok(raw) = std::fs::read_to_string(&path) {
-            if let Ok(ticket) = raw.parse::<Ticket>() {
-                map.insert(ticket.front_matter.id.clone(), ticket);
-            }
+        if let Ok(raw) = std::fs::read_to_string(&path)
+            && let Ok(ticket) = raw.parse::<Ticket>()
+        {
+            map.insert(ticket.front_matter.id.clone(), ticket);
         }
     }
     Ok(map)
@@ -359,7 +359,7 @@ mod tests {
         // c appears as a child of b, not as a root line without prefix
         let lines: Vec<&str> = out.lines().collect();
         assert!(
-            !lines.iter().any(|l| *l == "c  todo  Test ticket"),
+            !lines.contains(&"c  todo  Test ticket"),
             "c should not be a root: {}",
             out
         );

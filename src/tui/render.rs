@@ -282,7 +282,7 @@ fn draw_cards(
             block = block.title_bottom(Line::from(tag_spans).right_aligned());
         }
 
-        let content: Vec<Line> = title_lines.into_iter().map(|l| Line::from(l)).collect();
+        let content: Vec<Line> = title_lines.into_iter().map(Line::from).collect();
         let para = Paragraph::new(Text::from(content)).block(block);
         f.render_widget(para, card_area);
 
@@ -504,13 +504,12 @@ mod tests {
             .map(|id| make_ticket(id, long_title, TicketStatus::Todo))
             .collect();
         let mut app = App::new(tickets, columns);
-        for row in 0..ids.len() {
+        for (row, id) in ids.iter().enumerate() {
             app.row = row;
             let output = render_to_string(&app, 30, 13);
             assert!(
-                output.contains(ids[row]),
-                "row={row}: focused card '{}' not visible\n{output}",
-                ids[row]
+                output.contains(id),
+                "row={row}: focused card '{id}' not visible\n{output}"
             );
         }
     }

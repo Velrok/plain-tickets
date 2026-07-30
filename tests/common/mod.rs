@@ -21,6 +21,7 @@ pub fn test_dir(name: &str) -> PathBuf {
     dir
 }
 
+#[allow(dead_code)]
 pub fn tickets(dir: &Path, args: &[&str]) -> std::process::Output {
     Command::new(bin())
         .args(args)
@@ -30,6 +31,7 @@ pub fn tickets(dir: &Path, args: &[&str]) -> std::process::Output {
 }
 
 /// Run `init` then `new --title <title>`. Returns `(id, filename)`.
+#[allow(dead_code)]
 pub fn create_ticket(dir: &Path, title: &str) -> (String, String) {
     let out = tickets(dir, &["new", "--title", title]);
     assert!(out.status.success(), "create_ticket failed: {:?}", out);

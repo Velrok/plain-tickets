@@ -47,7 +47,7 @@ fn new_with_type_tags_status() {
     assert!(out.status.success(), "new failed: {:?}", out);
 
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let filename = stdout.trim().splitn(2, ' ').nth(1).unwrap();
+    let filename = stdout.trim().split_once(' ').unwrap().1;
     let content = fs::read_to_string(dir.join("all").join(filename)).unwrap();
 
     assert!(content.contains("type: epic"));
@@ -65,7 +65,7 @@ fn new_filename_slug_matches_title() {
     assert!(out.status.success());
 
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let filename = stdout.trim().splitn(2, ' ').nth(1).unwrap();
+    let filename = stdout.trim().split_once(' ').unwrap().1;
     assert!(
         filename.ends_with("fix-login-bug.md"),
         "unexpected filename: {}",
@@ -82,9 +82,7 @@ fn new_stdout_id_matches_filename_prefix() {
     assert!(out.status.success());
 
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let mut parts = stdout.trim().splitn(2, ' ');
-    let id = parts.next().unwrap();
-    let filename = parts.next().unwrap();
+    let (id, filename) = stdout.trim().split_once(' ').unwrap();
     assert!(
         filename.starts_with(id),
         "filename {} does not start with id {}",
@@ -111,7 +109,7 @@ fn new_with_body() {
     assert!(out.status.success());
 
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let filename = stdout.trim().splitn(2, ' ').nth(1).unwrap();
+    let filename = stdout.trim().split_once(' ').unwrap().1;
     let content = fs::read_to_string(dir.join("all").join(filename)).unwrap();
     assert!(content.contains("This is the body."));
 }
@@ -129,7 +127,7 @@ fn new_with_parent() {
     assert!(out.status.success());
 
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let filename = stdout.trim().splitn(2, ' ').nth(1).unwrap();
+    let filename = stdout.trim().split_once(' ').unwrap().1;
     let content = fs::read_to_string(dir.join("all").join(filename)).unwrap();
     assert!(content.contains(&format!("parent: {}", parent_id)));
 }
@@ -153,7 +151,7 @@ fn new_with_blocked_by() {
     assert!(out.status.success());
 
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let filename = stdout.trim().splitn(2, ' ').nth(1).unwrap();
+    let filename = stdout.trim().split_once(' ').unwrap().1;
     let content = fs::read_to_string(dir.join("all").join(filename)).unwrap();
     assert!(content.contains(&blocker_id.to_string()));
 }

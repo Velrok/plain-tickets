@@ -43,7 +43,7 @@ fn dir_flag_edit_updates_ticket_in_specified_dir() {
     let out = tickets_dir(&dir, &["new", "--title", "original title"]);
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let id = stdout.trim().splitn(2, ' ').next().unwrap().to_string();
+    let id = stdout.trim().split(' ').next().unwrap().to_string();
 
     let out = tickets_dir(&dir, &["edit", &id, "--title", "updated title"]);
     assert!(out.status.success(), "edit failed: {:?}", out);
