@@ -18,3 +18,4 @@ updated_at: 2026-07-30T23:10:31.452115Z
 - [ ] No-id form: forest of all tickets with no parent (top-level roots)
 - [ ] Hard error if id doesn't resolve
 - [ ] Documented in --help and docs
+- [ ] Tree nodes with status `done`/`rejected` are pruned from the tree by default; `--include-done` flag shows them

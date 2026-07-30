@@ -17,3 +17,4 @@ The `graph` command name doesn't communicate what it traverses (blocker edges). 
 - [ ] Rename `graph` subcommand to `graph-blockers` (same behaviour: no id = forest of unblocked roots, id = blocker chain for that ticket)
 - [ ] Keep `graph` as a hidden/deprecated alias for one release so existing scripts don't break
 - [ ] Update --help text and docs
+- [ ] Tree nodes with status `done`/`rejected` are pruned from the tree by default; `--include-done` flag shows them
