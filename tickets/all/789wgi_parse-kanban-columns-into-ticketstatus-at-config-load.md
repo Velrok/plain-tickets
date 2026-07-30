@@ -2,14 +2,14 @@
 id: 789wgi
 title: Parse kanban_columns into TicketStatus at config load
 type: bug
-status: todo
+status: done
 tags:
 - config
 - tui
 parent: null
 blocked_by: []
 created_at: 2026-07-30T17:42:48.432735Z
-updated_at: 2026-07-30T17:42:48.432735Z
+updated_at: 2026-07-30T19:11:16.118162Z
 ---
 
 ## Problem
