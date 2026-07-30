@@ -2,12 +2,12 @@
 id: oc1kcn
 title: fmt and clippy cleanup ahead of CI
 type: task
-status: in-progress
+status: done
 tags: []
 parent: null
 blocked_by: []
 created_at: 2026-07-30T18:41:50.134443Z
-updated_at: 2026-07-30T18:44:58.671190Z
+updated_at: 2026-07-30T18:48:06.233832Z
 ---
 
 ## What
