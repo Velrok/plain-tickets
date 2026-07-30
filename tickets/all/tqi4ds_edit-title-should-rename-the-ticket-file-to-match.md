@@ -2,13 +2,13 @@
 id: tqi4ds
 title: edit title should rename the ticket file to match
 type: task
-status: todo
+status: done
 tags:
 - cli
 parent: null
 blocked_by: []
 created_at: 2026-07-30T17:49:31.938490Z
-updated_at: 2026-07-30T17:49:31.938490Z
+updated_at: 2026-07-30T19:35:47.483183Z
 ---
 
 ## Problem
