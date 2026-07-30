@@ -2,14 +2,14 @@
 id: z4mw6o
 title: add --version flag
 type: task
-status: in-progress
+status: done
 tags:
 - version
 - cli
 parent: null
 blocked_by: []
 created_at: 2026-07-30T19:50:18.742809Z
-updated_at: 2026-07-30T19:53:59.584786Z
+updated_at: 2026-07-30T19:54:37.252939Z
 ---
 
 ## Goal
