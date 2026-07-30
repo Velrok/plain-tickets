@@ -63,6 +63,13 @@ pub fn cmd_graph(dir: WorkingDir, id: Option<TicketId>) -> Result<()> {
         None => render_forest(&graph),
     };
     print!("{}", output);
+
+    let cyclic = graph.cyclic_ids();
+    if !cyclic.is_empty() {
+        let mut ids: Vec<String> = cyclic.iter().map(ToString::to_string).collect();
+        ids.sort();
+        eprintln!("warning: dependency cycle detected among: {}", ids.join(", "));
+    }
     Ok(())
 }
 

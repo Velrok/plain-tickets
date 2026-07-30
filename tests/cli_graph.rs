@@ -50,6 +50,39 @@ fn graph_with_id_shows_tree_rooted_at_ticket() {
 }
 
 #[test]
+fn graph_warns_on_dependency_cycle() {
+    let dir = common::test_dir("graph_warns_on_dependency_cycle");
+    common::tickets(&dir, &["init"]);
+    let (id_a, _) = common::create_ticket(&dir, "Ticket A");
+    let (id_b, _) = common::create_ticket(&dir, "Ticket B");
+    common::tickets(&dir, &["edit", &id_a, "--blocked-by", &id_b]);
+    common::tickets(&dir, &["edit", &id_b, "--blocked-by", &id_a]);
+
+    let out = common::tickets(&dir, &["graph"]);
+    assert!(out.status.success(), "graph failed: {:?}", out);
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("dependency cycle"), "expected cycle warning: {}", stderr);
+    assert!(stderr.contains(&id_a), "expected id_a in warning: {}", stderr);
+    assert!(stderr.contains(&id_b), "expected id_b in warning: {}", stderr);
+}
+
+#[test]
+fn graph_acyclic_has_no_cycle_warning() {
+    let dir = common::test_dir("graph_acyclic_has_no_cycle_warning");
+    common::tickets(&dir, &["init"]);
+    let (id_a, _) = common::create_ticket(&dir, "Ticket A");
+    let (id_b, _) = common::create_ticket(&dir, "Ticket B");
+    common::tickets(&dir, &["edit", &id_b, "--blocked-by", &id_a]);
+
+    let out = common::tickets(&dir, &["graph"]);
+    assert!(out.status.success(), "graph failed: {:?}", out);
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!stderr.contains("dependency cycle"), "unexpected cycle warning: {}", stderr);
+}
+
+#[test]
 fn graph_blocked_ticket_not_a_forest_root() {
     let dir = common::test_dir("graph_blocked_ticket_not_a_forest_root");
     common::tickets(&dir, &["init"]);
