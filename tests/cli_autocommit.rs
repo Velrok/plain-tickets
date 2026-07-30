@@ -132,6 +132,49 @@ fn edit_auto_commits_when_enabled() {
 }
 
 #[test]
+fn edit_title_rename_is_a_single_commit_with_clean_tree() {
+    let dir = common::test_dir("autocommit_edit_rename_single_commit");
+    init_git_repo(&dir);
+    tickets(&dir, &["init"]);
+    enable_auto_commit(&dir);
+    git_commit_all(&dir, "chore: init");
+
+    let new_out = tickets(&dir, &["new", "--title", "Original Title"]);
+    assert!(new_out.status.success());
+    let stdout = String::from_utf8_lossy(&new_out.stdout);
+    let id = stdout
+        .trim()
+        .lines()
+        .last()
+        .unwrap()
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string();
+
+    let commits_before = git_log_count(&dir);
+
+    let edit_out = tickets(&dir, &["edit", &id, "--title", "Brand New Title"]);
+    assert!(edit_out.status.success(), "edit failed: {:?}", edit_out);
+
+    assert_eq!(
+        git_log_count(&dir),
+        commits_before + 1,
+        "expected exactly one commit covering both content change and rename"
+    );
+
+    let old_path = dir.join("all").join(format!("{id}_original-title.md"));
+    let new_path = dir.join("all").join(format!("{id}_brand-new-title.md"));
+    assert!(!old_path.exists(), "old filename should be gone");
+    assert!(new_path.exists(), "renamed file should exist");
+
+    assert!(
+        git_is_clean(&dir),
+        "working tree is dirty after title-rename edit"
+    );
+}
+
+#[test]
 fn archive_auto_commits_when_enabled() {
     let dir = common::test_dir("autocommit_archive_enabled");
     init_git_repo(&dir);

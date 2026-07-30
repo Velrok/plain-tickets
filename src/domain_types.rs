@@ -122,6 +122,15 @@ impl Title {
             .collect::<Vec<_>>()
             .join("-")
     }
+
+    /// Returns whether `filename` (in `<id>_<slug>.md` form) already encodes this title's slug.
+    pub fn slug_matches_filename(&self, id: &TicketId, filename: &str) -> bool {
+        let current_slug = filename
+            .strip_prefix(&format!("{id}_"))
+            .and_then(|s| s.strip_suffix(".md"))
+            .unwrap_or("");
+        current_slug == self.slugify()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -225,6 +234,29 @@ mod tests {
     fn slugify_handles_underscores_and_dots() {
         let t: Title = "foo_bar.baz".parse().unwrap();
         assert_eq!(t.slugify(), "foo-bar-baz");
+    }
+
+    // ── Title::slug_matches_filename ──────────────────────────────────────────
+
+    #[test]
+    fn slug_matches_filename_when_slug_is_current() {
+        let id: TicketId = "abc123".parse().unwrap();
+        let t: Title = "Fix Login Bug".parse().unwrap();
+        assert!(t.slug_matches_filename(&id, "abc123_fix-login-bug.md"));
+    }
+
+    #[test]
+    fn slug_does_not_match_filename_after_title_changed() {
+        let id: TicketId = "abc123".parse().unwrap();
+        let t: Title = "Renamed Title".parse().unwrap();
+        assert!(!t.slug_matches_filename(&id, "abc123_fix-login-bug.md"));
+    }
+
+    #[test]
+    fn slug_does_not_match_filename_of_a_different_id() {
+        let id: TicketId = "abc123".parse().unwrap();
+        let t: Title = "Fix Login Bug".parse().unwrap();
+        assert!(!t.slug_matches_filename(&id, "xyz999_fix-login-bug.md"));
     }
 
     // ── Ticket parse / display ────────────────────────────────────────────────

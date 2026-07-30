@@ -187,12 +187,12 @@ fn print_ticket(ticket: &Ticket) -> Result<()> {
     println!("✏️   updated   {}", fmt_timestamp(fm.updated_at));
     if !ticket.body.is_empty() {
         println!();
-        print_body(&ticket.body)?;
+        print_markdown(&ticket.body)?;
     }
     Ok(())
 }
 
-fn print_body(body: &str) -> Result<()> {
+fn print_markdown(body: &str) -> Result<()> {
     let bat_ok = std::process::Command::new("bat")
         .arg("--version")
         .output()
@@ -301,6 +301,36 @@ pub fn cmd_edit(dir: WorkingDir, cfg: &Config, args: EditArgs) -> Result<()> {
         .parse()
         .map_err(|e| anyhow::anyhow!("could not parse {}: {e}", path.display()))?;
 
+    let title_changed = apply_edits(&mut ticket, args)?;
+
+    std::fs::write(&path, ticket.to_string())
+        .with_context(|| format!("could not write {}", path.display()))?;
+
+    let new_path = title_changed
+        .then(|| {
+            renamed_path(
+                &all_dir,
+                &path,
+                &ticket.front_matter.id,
+                &ticket.front_matter.title,
+            )
+        })
+        .flatten();
+
+    let final_path = commit_edit(cfg, path, new_path, &ticket)?;
+
+    println!(
+        "updated {}",
+        final_path.file_name().unwrap().to_string_lossy()
+    );
+    Ok(())
+}
+
+/// Applies `args` onto `ticket`'s front matter and body. Returns whether the
+/// title was changed (the caller uses this to decide if a rename is needed).
+fn apply_edits(ticket: &mut Ticket, args: EditArgs) -> Result<bool> {
+    let title_changed = args.title.is_some();
+
     let fm = &mut ticket.front_matter;
     if let Some(t) = args.title {
         fm.title = t;
@@ -333,19 +363,51 @@ pub fn cmd_edit(dir: WorkingDir, cfg: &Config, args: EditArgs) -> Result<()> {
         };
     }
 
-    std::fs::write(&path, ticket.to_string())
-        .with_context(|| format!("could not write {}", path.display()))?;
+    Ok(title_changed)
+}
 
-    if cfg.git.auto_commit {
-        let message = format!(
-            "tickets: edit {} \"{}\"",
-            ticket.front_matter.id, ticket.front_matter.title
-        );
-        git::git_commit(Path::new("."), &path, &message)?;
+/// Persists an edited ticket at `path`, renaming to `new_path` when set, and
+/// commits the change under `cfg.git.auto_commit`. Returns the file's final path.
+fn commit_edit(
+    cfg: &Config,
+    path: PathBuf,
+    new_path: Option<PathBuf>,
+    ticket: &Ticket,
+) -> Result<PathBuf> {
+    let message = format!(
+        "tickets: edit {} \"{}\"",
+        ticket.front_matter.id, ticket.front_matter.title
+    );
+
+    if let Some(new_path) = new_path {
+        if cfg.git.auto_commit {
+            git::git_mv(Path::new("."), &path, &new_path, &message)?;
+        } else {
+            std::fs::rename(&path, &new_path)
+                .with_context(|| format!("could not rename {}", path.display()))?;
+        }
+        Ok(new_path)
+    } else {
+        if cfg.git.auto_commit {
+            git::git_commit(Path::new("."), &path, &message)?;
+        }
+        Ok(path)
     }
+}
 
-    println!("updated {}", path.file_name().unwrap().to_string_lossy());
-    Ok(())
+/// Returns the path the ticket file should live at given its (possibly new) title,
+/// or `None` if the slug embedded in `current_path`'s filename is already up to date.
+fn renamed_path(
+    all_dir: &Path,
+    current_path: &Path,
+    id: &TicketId,
+    title: &crate::domain_types::Title,
+) -> Option<PathBuf> {
+    let current_filename = current_path.file_name()?.to_string_lossy();
+    if title.slug_matches_filename(id, &current_filename) {
+        return None;
+    }
+    Some(all_dir.join(format!("{id}_{}.md", title.slugify())))
 }
 
 fn find_ticket(dir: &Path, id: &TicketId) -> Result<PathBuf> {
@@ -511,6 +573,131 @@ mod tests {
         cmd_init(dir.clone(), false).unwrap();
         let loaded = crate::config::load(&dir).unwrap();
         assert_eq!(loaded, crate::config::Config::default());
+    }
+
+    fn new_args(title: &str) -> NewArgs {
+        NewArgs {
+            title: title.parse().unwrap(),
+            r#type: None,
+            tag: vec![],
+            parent: None,
+            blocked_by: vec![],
+            status: None,
+            body: None,
+        }
+    }
+
+    fn edit_args(id: TicketId) -> EditArgs {
+        EditArgs {
+            id,
+            title: None,
+            r#type: None,
+            status: None,
+            tag: vec![],
+            parent: None,
+            clear_parent: false,
+            blocked_by: vec![],
+            clear_blocked_by: false,
+            body: None,
+        }
+    }
+
+    fn only_file_in(dir: &Path) -> PathBuf {
+        fs::read_dir(dir).unwrap().flatten().next().unwrap().path()
+    }
+
+    #[test]
+    fn edit_title_renames_file_to_match_new_slug() {
+        let dir = tmp_dir("edit_rename");
+        cmd_init(dir.clone(), false).unwrap();
+        let cfg = Config::default();
+
+        cmd_new(
+            WorkingDir::new(dir.clone()).unwrap(),
+            &cfg,
+            new_args("Original Title"),
+        )
+        .unwrap();
+
+        let all_dir = dir.join("all");
+        let old_path = only_file_in(&all_dir);
+        let old_filename = old_path.file_name().unwrap().to_string_lossy().to_string();
+        let id: TicketId = old_filename.split('_').next().unwrap().parse().unwrap();
+
+        let mut args = edit_args(id.clone());
+        args.title = Some("Brand New Title".parse().unwrap());
+        cmd_edit(WorkingDir::new(dir.clone()).unwrap(), &cfg, args).unwrap();
+
+        let expected = all_dir.join(format!("{}_brand-new-title.md", id));
+        assert!(
+            expected.exists(),
+            "expected renamed file {} to exist; dir contains: {:?}",
+            expected.display(),
+            fs::read_dir(&all_dir)
+                .unwrap()
+                .flatten()
+                .map(|e| e.file_name())
+                .collect::<Vec<_>>()
+        );
+        assert!(!old_path.exists(), "expected old filename to be gone");
+    }
+
+    #[test]
+    fn edit_non_title_field_does_not_rename_file() {
+        let dir = tmp_dir("edit_status_only");
+        cmd_init(dir.clone(), false).unwrap();
+        let cfg = Config::default();
+
+        cmd_new(
+            WorkingDir::new(dir.clone()).unwrap(),
+            &cfg,
+            new_args("Untouched Title"),
+        )
+        .unwrap();
+
+        let all_dir = dir.join("all");
+        let path = only_file_in(&all_dir);
+        let filename = path.file_name().unwrap().to_string_lossy().to_string();
+        let id: TicketId = filename.split('_').next().unwrap().parse().unwrap();
+
+        let mut args = edit_args(id);
+        args.status = Some(TicketStatus::Todo);
+        cmd_edit(WorkingDir::new(dir.clone()).unwrap(), &cfg, args).unwrap();
+
+        assert!(
+            path.exists(),
+            "filename should be unchanged after editing status"
+        );
+        assert_eq!(fs::read_dir(&all_dir).unwrap().flatten().count(), 1);
+    }
+
+    #[test]
+    fn edit_title_to_same_value_does_not_rename_file() {
+        let dir = tmp_dir("edit_title_unchanged");
+        cmd_init(dir.clone(), false).unwrap();
+        let cfg = Config::default();
+
+        cmd_new(
+            WorkingDir::new(dir.clone()).unwrap(),
+            &cfg,
+            new_args("Same Title"),
+        )
+        .unwrap();
+
+        let all_dir = dir.join("all");
+        let path = only_file_in(&all_dir);
+        let filename = path.file_name().unwrap().to_string_lossy().to_string();
+        let id: TicketId = filename.split('_').next().unwrap().parse().unwrap();
+
+        let mut args = edit_args(id);
+        args.title = Some("Same Title".parse().unwrap());
+        cmd_edit(WorkingDir::new(dir.clone()).unwrap(), &cfg, args).unwrap();
+
+        assert!(
+            path.exists(),
+            "filename should be unchanged when title is set to its current value"
+        );
+        assert_eq!(fs::read_dir(&all_dir).unwrap().flatten().count(), 1);
     }
 
     #[test]

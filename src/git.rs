@@ -63,6 +63,12 @@ fn git_commit_impl(repo_root: &Path, file: &Path, message: &str, silent: bool) -
 
 /// Moves `src` to `dst` via `git mv` then creates a commit with `message`.
 /// Both paths must be relative to `repo_root`.
+///
+/// `git mv` stages the rename using the content as of the last `git add`/commit,
+/// not whatever is currently on disk at `src` — so if the caller already wrote
+/// new content to `src` before moving it, that content would otherwise be lost
+/// from the commit (though it stays on disk, leaving a dirty working tree). An
+/// explicit `git add` on `dst` after the move re-stages the current content.
 pub fn git_mv(repo_root: &Path, src: &Path, dst: &Path, message: &str) -> Result<()> {
     let mv = Command::new("git")
         .current_dir(repo_root)
@@ -72,6 +78,16 @@ pub fn git_mv(repo_root: &Path, src: &Path, dst: &Path, message: &str) -> Result
 
     if !mv.success() {
         bail!("git mv failed (exit {})", mv.code().unwrap_or(1));
+    }
+
+    let add = Command::new("git")
+        .current_dir(repo_root)
+        .args(["add", "--", &dst.to_string_lossy()])
+        .status()
+        .map_err(|e| anyhow::anyhow!("failed to run git add: {e}"))?;
+
+    if !add.success() {
+        bail!("git add failed (exit {})", add.code().unwrap_or(1));
     }
 
     let commit = Command::new("git")
