@@ -200,7 +200,7 @@ fn print_body(body: &str) -> Result<()> {
         .unwrap_or(false);
     if bat_ok {
         let mut child = std::process::Command::new("bat")
-            .args(["--language=md", "--style=plain", "--color=always", "-"])
+            .args(["--language=md", "--style=plain", "--color=auto", "-"])
             .stdin(std::process::Stdio::piped())
             .spawn()
             .context("could not spawn bat")?;
