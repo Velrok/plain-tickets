@@ -1,8 +1,14 @@
-# plain-tickets configuration
-# Uncomment and set values to override defaults.
-
 [git]
 auto_commit = true
 
 [tui]
-kanban_columns = ["draft","todo", "in-progress", "done"]
+kanban_columns = [
+    "draft",
+    "todo",
+    "in-progress",
+    "done",
+]
+
+[new]
+default_status = "draft"
+default_type = "task"
