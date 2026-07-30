@@ -1,7 +1,6 @@
 use std::time::Instant;
 
 use chrono::Utc;
-use clap::ValueEnum as _;
 
 use crate::domain_types::{Ticket, TicketStatus};
 
@@ -16,8 +15,8 @@ pub enum Screen {
 
 pub struct App {
     pub tickets: Vec<Ticket>,
-    /// Status strings for each kanban column, e.g. ["todo", "in-progress", "done"]
-    pub columns: Vec<String>,
+    /// Status for each kanban column, e.g. [Todo, InProgress, Done]
+    pub columns: Vec<TicketStatus>,
     /// Focused column index
     pub col: usize,
     /// Focused row within the focused column
@@ -28,7 +27,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(tickets: Vec<Ticket>, columns: Vec<String>) -> Self {
+    pub fn new(tickets: Vec<Ticket>, columns: Vec<TicketStatus>) -> Self {
         App {
             tickets,
             columns,
@@ -41,11 +40,11 @@ impl App {
 
     /// Indices into `self.tickets` for tickets belonging to column `col`.
     pub fn col_indices(&self, col: usize) -> Vec<usize> {
-        let col_name = &self.columns[col];
+        let status = &self.columns[col];
         self.tickets
             .iter()
             .enumerate()
-            .filter(|(_, t)| t.front_matter.status.to_string() == *col_name)
+            .filter(|(_, t)| t.front_matter.status == *status)
             .map(|(i, _)| i)
             .collect()
     }
@@ -114,10 +113,7 @@ impl App {
             return false;
         };
         let ticket_id = self.tickets[idx].front_matter.id.to_string();
-        let new_status_str = self.columns[target_col].clone();
-        let Ok(new_status) = TicketStatus::from_str(&new_status_str, true) else {
-            return false;
-        };
+        let new_status = self.columns[target_col].clone();
 
         self.tickets[idx].front_matter.status = new_status;
         self.tickets[idx].front_matter.updated_at = Utc::now();
@@ -280,11 +276,11 @@ mod tests {
         }
     }
 
-    fn default_columns() -> Vec<String> {
+    fn default_columns() -> Vec<TicketStatus> {
         vec![
-            "todo".to_string(),
-            "in-progress".to_string(),
-            "done".to_string(),
+            TicketStatus::Todo,
+            TicketStatus::InProgress,
+            TicketStatus::Done,
         ]
     }
 

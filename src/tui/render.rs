@@ -442,7 +442,7 @@ mod tests {
     #[test]
     fn board_focused_card_visible_when_column_overflows() {
         // 3 cards, small height → only 2 fit; focus on 3rd → 3rd must be visible
-        let columns = vec!["todo".to_string()];
+        let columns = vec![TicketStatus::Todo];
         let tickets = vec![
             make_ticket("aaa111", "First ticket", TicketStatus::Todo),
             make_ticket("bbb222", "Second ticket", TicketStatus::Todo),
@@ -465,7 +465,7 @@ mod tests {
 
     #[test]
     fn board_shows_down_indicator_when_cards_clipped_below() {
-        let columns = vec!["todo".to_string()];
+        let columns = vec![TicketStatus::Todo];
         let tickets = vec![
             make_ticket("aaa111", "First ticket", TicketStatus::Todo),
             make_ticket("bbb222", "Second ticket", TicketStatus::Todo),
@@ -478,7 +478,7 @@ mod tests {
 
     #[test]
     fn board_shows_up_indicator_when_scrolled() {
-        let columns = vec!["todo".to_string()];
+        let columns = vec![TicketStatus::Todo];
         let tickets = vec![
             make_ticket("aaa111", "First ticket", TicketStatus::Todo),
             make_ticket("bbb222", "Second ticket", TicketStatus::Todo),
@@ -498,7 +498,7 @@ mod tests {
         // Bug: at row=2, scroll=0 so card 2 is not rendered (only 0 and 1 fit).
         let ids = ["aa1111", "bb2222", "cc3333", "dd4444", "ee5555"];
         let long_title = "A title that wraps to a second line here";
-        let columns = vec!["todo".to_string()];
+        let columns = vec![TicketStatus::Todo];
         let tickets = ids
             .iter()
             .map(|id| make_ticket(id, long_title, TicketStatus::Todo))
@@ -518,7 +518,7 @@ mod tests {
 
     #[test]
     fn board_card_renders_as_bordered_box_with_id_in_title() {
-        let columns = vec!["todo".to_string()];
+        let columns = vec![TicketStatus::Todo];
         let tickets = vec![make_ticket("abc123", "Fix login bug", TicketStatus::Todo)];
         let app = App::new(tickets, columns);
         let output = render_to_string(&app, 30, 10);
@@ -527,7 +527,7 @@ mod tests {
 
     #[test]
     fn board_card_footer_shows_tags() {
-        let columns = vec!["todo".to_string()];
+        let columns = vec![TicketStatus::Todo];
         let tickets = vec![make_ticket_with_tags(
             "abc123",
             "Fix login bug",
@@ -541,7 +541,7 @@ mod tests {
 
     #[test]
     fn board_card_wraps_long_title() {
-        let columns = vec!["todo".to_string()];
+        let columns = vec![TicketStatus::Todo];
         let tickets = vec![make_ticket(
             "abc123",
             "Fix the login bug on the home page",
@@ -554,7 +554,7 @@ mod tests {
 
     #[test]
     fn board_cards_clip_when_column_overflows() {
-        let columns = vec!["todo".to_string()];
+        let columns = vec![TicketStatus::Todo];
         let tickets = vec![
             make_ticket("aaa111", "First ticket", TicketStatus::Todo),
             make_ticket("bbb222", "Second ticket", TicketStatus::Todo),
@@ -573,9 +573,9 @@ mod tests {
     #[test]
     fn board_renders_three_columns() {
         let columns = vec![
-            "todo".to_string(),
-            "in-progress".to_string(),
-            "done".to_string(),
+            TicketStatus::Todo,
+            TicketStatus::InProgress,
+            TicketStatus::Done,
         ];
         let tickets = vec![
             make_ticket("aaa111", "Fix login bug", TicketStatus::Todo),
@@ -589,9 +589,9 @@ mod tests {
     #[test]
     fn detail_view_renders_ticket_fields() {
         let columns = vec![
-            "todo".to_string(),
-            "in-progress".to_string(),
-            "done".to_string(),
+            TicketStatus::Todo,
+            TicketStatus::InProgress,
+            TicketStatus::Done,
         ];
         let tickets = vec![make_ticket("abc123", "Fix login bug", TicketStatus::Todo)];
         let mut app = App::new(tickets, columns);
@@ -603,9 +603,9 @@ mod tests {
     #[test]
     fn help_overlay_renders_keybindings() {
         let columns = vec![
-            "todo".to_string(),
-            "in-progress".to_string(),
-            "done".to_string(),
+            TicketStatus::Todo,
+            TicketStatus::InProgress,
+            TicketStatus::Done,
         ];
         let mut app = App::new(vec![], columns);
         app.screen = Screen::Help;

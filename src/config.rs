@@ -28,15 +28,15 @@ pub struct NewConfig {
 #[serde(deny_unknown_fields)]
 pub struct TuiConfig {
     #[serde(default = "TuiConfig::default_kanban_columns")]
-    pub kanban_columns: Vec<String>,
+    pub kanban_columns: Vec<TicketStatus>,
 }
 
 impl TuiConfig {
-    fn default_kanban_columns() -> Vec<String> {
+    fn default_kanban_columns() -> Vec<TicketStatus> {
         vec![
-            "todo".to_string(),
-            "in-progress".to_string(),
-            "done".to_string(),
+            TicketStatus::Todo,
+            TicketStatus::InProgress,
+            TicketStatus::Done,
         ]
     }
 }
@@ -110,19 +110,29 @@ mod tests {
     fn tui_kanban_columns_defaults() {
         let dir = tmp_dir("tui_defaults");
         let cfg = load(&dir).unwrap();
-        assert_eq!(cfg.tui.kanban_columns, vec!["todo", "in-progress", "done"]);
+        assert_eq!(
+            cfg.tui.kanban_columns,
+            vec![
+                TicketStatus::Todo,
+                TicketStatus::InProgress,
+                TicketStatus::Done
+            ]
+        );
     }
 
     #[test]
-    fn tui_kanban_columns_parsed_from_config() {
-        let dir = tmp_dir("tui_columns_parsed");
+    fn tui_kanban_columns_invalid_name_is_error() {
+        let dir = tmp_dir("tui_columns_invalid");
         fs::write(
             dir.join(".tickets.toml"),
-            "[tui]\nkanban_columns = [\"backlog\", \"active\", \"closed\"]\n",
+            "[tui]\nkanban_columns = [\"in_progress\"]\n",
         )
         .unwrap();
-        let cfg = load(&dir).unwrap();
-        assert_eq!(cfg.tui.kanban_columns, vec!["backlog", "active", "closed"]);
+        let err = load(&dir).unwrap_err();
+        assert!(
+            !err.to_string().is_empty(),
+            "expected error, got empty: {err}"
+        );
     }
 
     #[test]

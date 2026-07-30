@@ -16,8 +16,6 @@ use crossterm::{
 use notify::{RecursiveMode, Watcher};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use clap::ValueEnum as _;
-
 use crate::application_types::WorkingDir;
 use crate::config::Config;
 use crate::domain_types::{FrontMatter, Ticket, TicketId, TicketStatus, TicketType, Title};
@@ -167,8 +165,7 @@ fn create_and_edit<B: ratatui::backend::Backend + std::io::Write>(
     working_dir: &WorkingDir,
 ) -> Result<()> {
     // Determine status from the current column.
-    let col_name = app.columns[app.col].clone();
-    let status = TicketStatus::from_str(&col_name, true).unwrap_or(TicketStatus::Todo);
+    let status = app.columns[app.col].clone();
 
     let path = create_draft_ticket(working_dir, status)?;
 
