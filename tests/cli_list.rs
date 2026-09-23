@@ -417,6 +417,125 @@ fn list_unblocked_and_repeated_tag_keeps_and_semantics() {
 }
 
 #[test]
+fn list_shows_emoji_for_each_ticket_type() {
+    let dir = common::test_dir("list_shows_emoji_for_each_ticket_type");
+    common::tickets(&dir, &["init"]);
+    common::tickets(&dir, &["new", "--title", "An epic", "--type", "epic"]);
+    common::tickets(&dir, &["new", "--title", "A story", "--type", "story"]);
+    common::tickets(&dir, &["new", "--title", "A task", "--type", "task"]);
+    common::tickets(&dir, &["new", "--title", "A bug", "--type", "bug"]);
+
+    let out = common::tickets(&dir, &["list"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains('🎯'), "missing epic emoji: {}", stdout);
+    assert!(stdout.contains('📖'), "missing story emoji: {}", stdout);
+    assert!(stdout.contains('🔧'), "missing task emoji: {}", stdout);
+    assert!(stdout.contains('🐛'), "missing bug emoji: {}", stdout);
+}
+
+#[test]
+fn list_type_word_still_present_alongside_emoji() {
+    let dir = common::test_dir("list_type_word_still_present_alongside_emoji");
+    common::tickets(&dir, &["init"]);
+    common::tickets(&dir, &["new", "--title", "A bug", "--type", "bug"]);
+    common::tickets(&dir, &["new", "--title", "A task", "--type", "task"]);
+
+    let out = common::tickets(&dir, &["list"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let bug_line = stdout
+        .lines()
+        .find(|l| l.contains("A bug"))
+        .expect("bug line present");
+    assert!(
+        bug_line.contains("bug"),
+        "type word should still be present for filtering: {}",
+        bug_line
+    );
+}
+
+#[test]
+fn list_title_column_aligns_across_mixed_type_widths() {
+    let dir = common::test_dir("list_title_column_aligns_across_mixed_type_widths");
+    common::tickets(&dir, &["init"]);
+    // "bug" (short word) vs "story" (long word), each with its own emoji.
+    common::tickets(&dir, &["new", "--title", "A bug", "--type", "bug"]);
+    common::tickets(&dir, &["new", "--title", "A story", "--type", "story"]);
+
+    let out = common::tickets(&dir, &["list"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "expected 2 lines, got: {:?}", lines);
+
+    let bug_line = lines
+        .iter()
+        .find(|l| l.contains("A bug"))
+        .expect("bug line present");
+    let story_line = lines
+        .iter()
+        .find(|l| l.contains("A story"))
+        .expect("story line present");
+
+    // Column position, not string content: the display width (terminal
+    // columns) of everything before the title text must match across rows.
+    let title_start_col = |line: &str, title: &str| -> usize {
+        let byte_idx = line.find(title).expect("title present in line");
+        unicode_width::UnicodeWidthStr::width(&line[..byte_idx])
+    };
+    assert_eq!(
+        title_start_col(bug_line, "A bug"),
+        title_start_col(story_line, "A story"),
+        "title column should start at the same display column regardless of emoji width:\n{}\n{}",
+        bug_line,
+        story_line
+    );
+}
+
+#[test]
+fn list_widest_type_column_has_no_wasted_padding() {
+    // Row-to-row alignment alone can pass even against the byte-length bug
+    // for this glyph set: every type column carries exactly one emoji, so a
+    // byte/char measure mismatch adds the same *uniform* extra padding to
+    // every row and cancels out in relative terms. What it does NOT cancel
+    // out is the *absolute* gap after the widest column - a byte-length
+    // width computation treats a 4-byte, 2-column-wide emoji as needing 4
+    // display columns, so it over-pads the row that defines the column
+    // width by the byte/char difference. Assert that gap is tight instead.
+    let dir = common::test_dir("list_widest_type_column_has_no_wasted_padding");
+    common::tickets(&dir, &["init"]);
+    // "🎯 epic" (7 display columns) is wider than "🐛 bug" (6), so epic's
+    // row drives the column width. Titles avoid the word "epic"/"bug" so
+    // the first occurrence found is unambiguously the type word.
+    common::tickets(&dir, &["new", "--title", "Ticket one", "--type", "epic"]);
+    common::tickets(&dir, &["new", "--title", "Ticket two", "--type", "bug"]);
+
+    let out = common::tickets(&dir, &["list"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let epic_line = stdout
+        .lines()
+        .find(|l| l.contains("Ticket one"))
+        .expect("epic line present");
+
+    let word_end = epic_line.find("epic").expect("type word present") + "epic".len();
+    let title_start = epic_line.find("Ticket one").expect("title present");
+    let gap = &epic_line[word_end..title_start];
+    assert_eq!(
+        gap, "  ",
+        "widest type column should be followed by exactly the two-space \
+         column separator, not extra padding from a byte-length width \
+         calculation: {:?}",
+        epic_line
+    );
+}
+
+#[test]
 fn list_sorted_by_status_then_created_at() {
     let dir = common::test_dir("list_sorted_by_status_then_created_at");
     common::tickets(&dir, &["init"]);
