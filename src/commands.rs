@@ -253,10 +253,11 @@ pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
     tickets.sort_by(|a, b| {
         let status_order = |s: &TicketStatus| match s {
             TicketStatus::InProgress => 0,
-            TicketStatus::Todo => 1,
-            TicketStatus::Draft => 2,
-            TicketStatus::Done => 3,
-            TicketStatus::Rejected => 4,
+            TicketStatus::Review => 1,
+            TicketStatus::Todo => 2,
+            TicketStatus::Draft => 3,
+            TicketStatus::Done => 4,
+            TicketStatus::Rejected => 5,
         };
         status_order(&a.front_matter.status)
             .cmp(&status_order(&b.front_matter.status))

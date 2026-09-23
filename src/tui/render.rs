@@ -594,6 +594,27 @@ mod tests {
     }
 
     #[test]
+    fn board_renders_five_columns() {
+        let columns = vec![
+            TicketStatus::Draft,
+            TicketStatus::Todo,
+            TicketStatus::InProgress,
+            TicketStatus::Review,
+            TicketStatus::Done,
+        ];
+        let tickets = vec![
+            make_ticket("aaa111", "Draft idea", TicketStatus::Draft),
+            make_ticket("bbb222", "Fix login bug", TicketStatus::Todo),
+            make_ticket("ccc333", "Add search", TicketStatus::InProgress),
+            make_ticket("ddd444", "Check payments", TicketStatus::Review),
+            make_ticket("eee555", "Ship release", TicketStatus::Done),
+        ];
+        let app = App::new(tickets, columns);
+        let output = render_to_string(&app, 100, 20);
+        insta::assert_snapshot!(output);
+    }
+
+    #[test]
     fn detail_view_renders_ticket_fields() {
         let columns = vec![
             TicketStatus::Todo,

@@ -16,6 +16,19 @@ fn edit_updates_status() {
 }
 
 #[test]
+fn edit_updates_status_to_review() {
+    let dir = common::test_dir("edit_updates_status_to_review");
+    common::tickets(&dir, &["init"]);
+    let (id, filename) = common::create_ticket(&dir, "Some ticket");
+
+    let out = common::tickets(&dir, &["edit", &id, "--status", "review"]);
+    assert!(out.status.success(), "edit failed: {:?}", out);
+
+    let content = fs::read_to_string(dir.join("all").join(&filename)).unwrap();
+    assert!(content.contains("status: review"));
+}
+
+#[test]
 fn edit_updates_title() {
     let dir = common::test_dir("edit_updates_title");
     common::tickets(&dir, &["init"]);

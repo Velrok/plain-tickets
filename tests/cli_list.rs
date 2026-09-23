@@ -22,6 +22,27 @@ fn list_filter_status_returns_matching_only() {
 }
 
 #[test]
+fn list_filter_status_review_returns_matching_only() {
+    let dir = common::test_dir("list_filter_status_review_returns_matching_only");
+    common::tickets(&dir, &["init"]);
+    let (id_review, _) = common::create_ticket(&dir, "Review ticket");
+    common::tickets(&dir, &["edit", &id_review, "--status", "review"]);
+    let (_id_todo, _) = common::create_ticket(&dir, "Todo ticket");
+
+    let out = common::tickets(&dir, &["list", "--status", "review"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 1, "expected 1 line, got: {:?}", lines);
+    assert!(
+        lines[0].contains("Review ticket"),
+        "expected review ticket: {}",
+        lines[0]
+    );
+}
+
+#[test]
 fn list_filter_status_or_semantics() {
     let dir = common::test_dir("list_filter_status_or_semantics");
     common::tickets(&dir, &["init"]);

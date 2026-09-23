@@ -121,6 +121,26 @@ mod tests {
     }
 
     #[test]
+    fn tui_kanban_columns_with_review_loads() {
+        let dir = tmp_dir("tui_columns_review");
+        fs::write(
+            dir.join(".tickets.toml"),
+            "[tui]\nkanban_columns = [\"todo\", \"in-progress\", \"review\", \"done\"]\n",
+        )
+        .unwrap();
+        let cfg = load(&dir).unwrap();
+        assert_eq!(
+            cfg.tui.kanban_columns,
+            vec![
+                TicketStatus::Todo,
+                TicketStatus::InProgress,
+                TicketStatus::Review,
+                TicketStatus::Done
+            ]
+        );
+    }
+
+    #[test]
     fn tui_kanban_columns_invalid_name_is_error() {
         let dir = tmp_dir("tui_columns_invalid");
         fs::write(

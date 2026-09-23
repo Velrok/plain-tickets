@@ -113,6 +113,22 @@ fn archive_all_rejected_moves_rejected_tickets() {
 }
 
 #[test]
+fn archive_all_rejected_leaves_review_ticket_alone() {
+    let dir = setup("archive_all_rejected_leaves_review");
+    let (id1, f1) = common::create_ticket(&dir, "Rejected one");
+    let (id2, f2) = common::create_ticket(&dir, "Under review");
+    common::tickets(&dir, &["edit", &id1, "--status", "rejected"]);
+    common::tickets(&dir, &["edit", &id2, "--status", "review"]);
+    let out = common::tickets(&dir, &["archive", "--all-rejected"]);
+    assert!(out.status.success(), "all-rejected failed: {:?}", out);
+    assert!(dir.join("archived").join(&f1).exists(), "f1 not archived");
+    assert!(
+        dir.join("all").join(&f2).exists(),
+        "review ticket should stay in all/"
+    );
+}
+
+#[test]
 fn archive_all_rejected_no_matches_exits_zero() {
     let dir = setup("archive_all_rejected_none");
     common::create_ticket(&dir, "Not rejected");
