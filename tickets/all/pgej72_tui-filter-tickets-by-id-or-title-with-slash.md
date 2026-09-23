@@ -121,3 +121,61 @@ take this one after that has landed rather than alongside it.
 Test fixtures in the tui test modules use a local `fixed_timestamp()` helper
 rather than `Utc::now()`, deliberately - the suite must stay date
 independent. Follow that convention.
+
+## Implementation notes
+
+All changes confined to `src/tui/`.
+
+### src/tui/app.rs
+
+- New `Screen::Filter` variant and `App::filter: String`, a session-only live
+  query that is never persisted.
+- `App::col_indices` now filters on status and query in one pass, keeping it
+  the single source of truth, so scrolling, focus, `H`/`L` moves, `y` and
+  `Enter` all respect the filter for free. Matching is case-insensitive
+  substring against id-or-title via a new `ticket_matches_query` helper; an
+  empty query matches everything.
+- New private mutators called from `update`: `open_filter`,
+  `push_filter_char` / `pop_filter_char` (both re-clamp row via the existing
+  `clamp_row`), `commit_filter` (Enter, keeps the query), `cancel_filter`
+  (Esc from the prompt, clears the query even if one was active before `/`
+  was pressed), and `clear_filter` (Esc from the board, a no-op when empty).
+- New `Message` variants: `OpenFilter`, `FilterInput(char)`,
+  `FilterBackspace`, `FilterCommit`, `FilterCancel`, `ClearFilter`.
+
+### src/tui/mod.rs - key_to_message
+
+- `Screen::Board`: `/` opens the filter, `Esc` clears an active one.
+- New `Screen::Filter` arm: `Enter` commits, `Esc` cancels, `Backspace`
+  deletes, and any other `Char(c)` becomes `FilterInput(c)`. This is the
+  total-capture mechanism - `q`, `j`, `k`, `n` and `e` all fall into the
+  `Char(c)` catch-all as literal text and never reach a command.
+- `Screen::Help` special-cases `/` to `None` so the filter stays board-only.
+  `Screen::Detail` needed no change; `/` already fell through its wildcard.
+
+### src/tui/render.rs
+
+- `view()` renders `Screen::Filter` as the board with no overlay; only the
+  footer changes.
+- Footer precedence is now flash message, then filter prompt, then
+  active-filter indicator, then the default hint.
+
+### Judgement call - the default footer hint was already broken
+
+The pre-existing hint was **90 characters**, silently overflowing the 80
+column terminal used in tests and visibly clipped mid-word in the old
+snapshots. Rather than append to an already-overflowing string, the hint was
+reworded and shortened to 76 characters, which fits with margin. This is why
+all eight pre-existing snapshots changed - each diff is footer-only and was
+confirmed as such before acceptance.
+
+### Tests
+
+21 new: 7 unit on `key_to_message`, 12 unit on `App`, 2 snapshots. The ticket
+listed 9 unit tests; 4 extra were judged worth adding. Notably
+`focused_ticket_none_and_no_key_panics_when_nothing_matches` drives
+OpenDetail, CopyId, OpenEditor and both ticket moves through `update` against
+an empty filtered column, confirming all are safe no-ops.
+
+Snapshots were promoted by hand after reviewing each diff, as no
+`cargo-insta` binary was available in the environment.
