@@ -378,14 +378,21 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
+    use chrono::{TimeZone, Utc};
     use ratatui::{Terminal, backend::TestBackend};
 
     use crate::domain_types::{FrontMatter, Ticket, TicketId, TicketStatus, TicketType, Title};
     use crate::tui::app::App;
 
+    /// Fixed, obviously-fictional timestamp for test fixtures, so rendered
+    /// snapshots never depend on the wall clock. Constructed deterministically
+    /// rather than parsed, so it can never fail at runtime.
+    fn fixed_timestamp() -> chrono::DateTime<Utc> {
+        Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap()
+    }
+
     fn make_ticket(id: &str, title: &str, status: TicketStatus) -> Ticket {
-        let now = Utc::now();
+        let now = fixed_timestamp();
         Ticket {
             front_matter: FrontMatter {
                 id: TicketId::from(id.to_string()),
@@ -420,7 +427,7 @@ mod tests {
     }
 
     fn make_ticket_with_tags(id: &str, title: &str, status: TicketStatus, tags: &[&str]) -> Ticket {
-        let now = Utc::now();
+        let now = fixed_timestamp();
         Ticket {
             front_matter: FrontMatter {
                 id: TicketId::from(id.to_string()),
