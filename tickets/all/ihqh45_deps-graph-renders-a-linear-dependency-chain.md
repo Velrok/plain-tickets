@@ -2,13 +2,13 @@
 id: ihqh45
 title: deps-graph renders a linear dependency chain
 type: task
-status: draft
+status: in-progress
 tags:
 - deps-graph
 parent: fyihf8
 blocked_by: []
 created_at: 2026-09-23T10:13:43.336869Z
-updated_at: 2026-09-23T10:13:43.336869Z
+updated_at: 2026-09-23T10:20:04.205147Z
 ---
 
 ## Behaviour
