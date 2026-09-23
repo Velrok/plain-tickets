@@ -13,27 +13,44 @@ use petgraph::Direction;
 use petgraph::graph::{DiGraph, NodeIndex};
 
 use crate::application_types::WorkingDir;
-use crate::domain_types::{Ticket, TicketId};
+use crate::domain_types::{Ticket, TicketId, TicketStatus};
 
-/// How a single `blocked_by` id resolves against the active ticket set.
+/// How a single `blocked_by` id resolves, against the active ticket set
+/// first and then, on a miss, one fallback lookup in `archived/`.
 ///
-/// This slice only ever produces `Active` — a `blocked_by` id that isn't an
-/// active ticket (archived, or missing entirely) is dropped without a node
-/// or edge for now. This is the single seam later tickets widen: archived
-/// done (7se1mu) and archived non-done (xptucc) fall back to a lookup in
-/// `archived/`, and a genuinely unknown id (t9p76e) becomes a `Missing`
-/// stub. `list --unblocked` (rm49xa) is expected to call the same
-/// resolution function rather than reimplementing the rule.
+/// This is the single seam later tickets widen: archived non-done (xptucc)
+/// gets an `Archived` stub variant, and a genuinely unknown id (t9p76e)
+/// gets a `Missing` stub variant. `list --unblocked` (rm49xa) is expected
+/// to call the same resolution function rather than reimplementing the
+/// rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum BlockerResolution {
-    /// Blocker is an active ticket — render an edge into it.
+    /// Blocker is an active ticket — render an edge into it regardless of
+    /// its status. The graph shows active structure; only out-of-active-set
+    /// ids get resolved away.
     Active(TicketId),
+    /// Blocker isn't active, but was found archived with status `done` —
+    /// satisfied. No edge, no node.
+    ArchivedDone(TicketId),
 }
 
-fn resolve_blocker(active: &HashMap<TicketId, Ticket>, id: &TicketId) -> Option<BlockerResolution> {
-    active
-        .contains_key(id)
-        .then(|| BlockerResolution::Active(id.clone()))
+/// Resolve a single `blocked_by` id: active tickets always resolve
+/// (`Active`, any status); otherwise fall back to one lookup in the
+/// archived set, which only resolves (`ArchivedDone`) when that archived
+/// ticket's status is `done` — never a negation of the other statuses, so
+/// this keeps resolving correctly as `TicketStatus` grows new variants.
+fn resolve_blocker(
+    active: &HashMap<TicketId, Ticket>,
+    archived: &HashMap<TicketId, Ticket>,
+    id: &TicketId,
+) -> Option<BlockerResolution> {
+    if active.contains_key(id) {
+        return Some(BlockerResolution::Active(id.clone()));
+    }
+    archived.get(id).and_then(|ticket| {
+        (ticket.front_matter.status == TicketStatus::Done)
+            .then(|| BlockerResolution::ArchivedDone(id.clone()))
+    })
 }
 
 /// The dependency graph: one node per active ticket, one edge per
@@ -47,10 +64,14 @@ pub struct DepsGraph {
 impl DepsGraph {
     pub fn build(dir: &WorkingDir) -> Result<Self> {
         let active = load_active(dir)?;
-        Ok(Self::from_active(active))
+        let archived = load_dir(&dir.archived())?;
+        Ok(Self::from_maps(active, &archived))
     }
 
-    fn from_active(active: HashMap<TicketId, Ticket>) -> Self {
+    /// Construct from a pre-loaded active map, resolving `blocked_by`
+    /// against `active` and then, on a miss, `archived`. Archived tickets
+    /// are never added as nodes — only active tickets are.
+    fn from_maps(active: HashMap<TicketId, Ticket>, archived: &HashMap<TicketId, Ticket>) -> Self {
         let mut graph = DiGraph::new();
         let mut index_of = HashMap::new();
         for id in active.keys() {
@@ -59,7 +80,7 @@ impl DepsGraph {
         for (id, ticket) in &active {
             for blocker in &ticket.front_matter.blocked_by {
                 if let Some(BlockerResolution::Active(blocker_id)) =
-                    resolve_blocker(&active, blocker)
+                    resolve_blocker(&active, archived, blocker)
                 {
                     let from = index_of[&blocker_id];
                     let to = index_of[id];
@@ -116,13 +137,20 @@ impl DepsGraph {
     }
 }
 
-fn load_active(dir: &WorkingDir) -> Result<HashMap<TicketId, Ticket>> {
+/// Load every parseable ticket from `dir.all()`, keyed by id.
+pub(crate) fn load_active(dir: &WorkingDir) -> Result<HashMap<TicketId, Ticket>> {
+    load_dir(&dir.all())
+}
+
+/// Load every parseable `.md` ticket directly under `path`, keyed by id.
+/// Shared by the active-set loader above and the archived-fallback lookup
+/// in `DepsGraph::build`.
+fn load_dir(path: &std::path::Path) -> Result<HashMap<TicketId, Ticket>> {
     let mut map = HashMap::new();
-    let all_dir = dir.all();
-    if !all_dir.exists() {
+    if !path.exists() {
         return Ok(map);
     }
-    for entry in std::fs::read_dir(&all_dir)?.flatten() {
+    for entry in std::fs::read_dir(path)?.flatten() {
         let path = entry.path();
         if path.extension().and_then(|s| s.to_str()) != Some("md") {
             continue;
@@ -169,5 +197,81 @@ fn render_node(
             &format!("{}{}", child_base, extension),
             output,
         );
+    }
+}
+
+#[cfg(test)]
+mod resolve_blocker_tests {
+    use chrono::Utc;
+
+    use super::*;
+    use crate::domain_types::{FrontMatter, TicketStatus, TicketType};
+
+    fn make_ticket(id: &str, status: TicketStatus) -> Ticket {
+        Ticket {
+            front_matter: FrontMatter {
+                id: id.parse().unwrap(),
+                title: "Test ticket".parse().unwrap(),
+                r#type: TicketType::Task,
+                status,
+                tags: vec![],
+                parent: None,
+                blocked_by: vec![],
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            },
+            body: String::new(),
+        }
+    }
+
+    fn id(s: &str) -> TicketId {
+        s.parse().unwrap()
+    }
+
+    #[test]
+    fn active_blocker_resolves_active_regardless_of_status() {
+        let active: HashMap<TicketId, Ticket> = [(id("a"), make_ticket("a", TicketStatus::Todo))]
+            .into_iter()
+            .collect();
+        let archived = HashMap::new();
+
+        let resolution = resolve_blocker(&active, &archived, &id("a"));
+
+        assert_eq!(resolution, Some(BlockerResolution::Active(id("a"))));
+    }
+
+    #[test]
+    fn archived_done_blocker_resolves_archived_done() {
+        let active = HashMap::new();
+        let archived: HashMap<TicketId, Ticket> = [(id("a"), make_ticket("a", TicketStatus::Done))]
+            .into_iter()
+            .collect();
+
+        let resolution = resolve_blocker(&active, &archived, &id("a"));
+
+        assert_eq!(resolution, Some(BlockerResolution::ArchivedDone(id("a"))));
+    }
+
+    #[test]
+    fn archived_non_done_blocker_is_not_resolved() {
+        let active = HashMap::new();
+        let archived: HashMap<TicketId, Ticket> =
+            [(id("a"), make_ticket("a", TicketStatus::Rejected))]
+                .into_iter()
+                .collect();
+
+        let resolution = resolve_blocker(&active, &archived, &id("a"));
+
+        assert_eq!(resolution, None);
+    }
+
+    #[test]
+    fn blocker_missing_everywhere_is_not_resolved() {
+        let active = HashMap::new();
+        let archived = HashMap::new();
+
+        let resolution = resolve_blocker(&active, &archived, &id("a"));
+
+        assert_eq!(resolution, None);
     }
 }
