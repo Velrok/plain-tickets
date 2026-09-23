@@ -2,7 +2,7 @@
 id: fe17ed
 title: Remove the graph subcommand
 type: task
-status: draft
+status: todo
 tags:
 - deps-graph
 parent: fyihf8
@@ -15,7 +15,7 @@ blocked_by:
 - t9p76e
 - hx1po6
 created_at: 2026-09-23T10:14:02.306072Z
-updated_at: 2026-09-23T10:14:02.306072Z
+updated_at: 2026-09-23T10:28:42.546516Z
 ---
 
 ## Behaviour
