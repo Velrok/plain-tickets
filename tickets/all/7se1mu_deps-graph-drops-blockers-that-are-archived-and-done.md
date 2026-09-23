@@ -2,14 +2,14 @@
 id: 7se1mu
 title: deps-graph drops blockers that are archived and done
 type: task
-status: todo
+status: in-progress
 tags:
 - deps-graph
 parent: fyihf8
 blocked_by:
 - ihqh45
 created_at: 2026-09-23T10:13:43.678203Z
-updated_at: 2026-09-23T10:28:42.222190Z
+updated_at: 2026-09-23T11:04:55.477830Z
 ---
 
 ## Behaviour
