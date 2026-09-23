@@ -207,6 +207,75 @@ fn list_shows_multiple_tickets() {
 }
 
 #[test]
+fn list_unblocked_includes_ticket_with_no_blockers() {
+    let dir = common::test_dir("list_unblocked_includes_ticket_with_no_blockers");
+    common::tickets(&dir, &["init"]);
+    common::create_ticket(&dir, "Free-standing ticket");
+
+    let out = common::tickets(&dir, &["list", "--unblocked"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 1, "expected 1 line, got: {:?}", lines);
+    assert!(lines[0].contains("Free-standing ticket"));
+}
+
+#[test]
+fn list_unblocked_excludes_ticket_blocked_by_todo() {
+    let dir = common::test_dir("list_unblocked_excludes_ticket_blocked_by_todo");
+    common::tickets(&dir, &["init"]);
+    let (blocker_id, _) = common::create_ticket(&dir, "Blocker still todo");
+    common::tickets(&dir, &["edit", &blocker_id, "--status", "todo"]);
+    common::tickets(
+        &dir,
+        &[
+            "new",
+            "--title",
+            "Blocked ticket",
+            "--blocked-by",
+            &blocker_id,
+        ],
+    );
+
+    let out = common::tickets(&dir, &["list", "--unblocked"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 1, "expected 1 line, got: {:?}", lines);
+    assert!(lines[0].contains("Blocker still todo"));
+    assert!(!stdout.contains("Blocked ticket"));
+}
+
+#[test]
+fn list_unblocked_includes_ticket_whose_only_blocker_is_done() {
+    let dir = common::test_dir("list_unblocked_includes_ticket_whose_only_blocker_is_done");
+    common::tickets(&dir, &["init"]);
+    let (blocker_id, _) = common::create_ticket(&dir, "Blocker now done");
+    common::tickets(&dir, &["edit", &blocker_id, "--status", "done"]);
+    common::tickets(
+        &dir,
+        &[
+            "new",
+            "--title",
+            "Unblocked ticket",
+            "--blocked-by",
+            &blocker_id,
+        ],
+    );
+
+    let out = common::tickets(&dir, &["list", "--unblocked"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "expected 2 lines, got: {:?}", lines);
+    assert!(stdout.contains("Blocker now done"));
+    assert!(stdout.contains("Unblocked ticket"));
+}
+
+#[test]
 fn list_sorted_by_status_then_created_at() {
     let dir = common::test_dir("list_sorted_by_status_then_created_at");
     common::tickets(&dir, &["init"]);

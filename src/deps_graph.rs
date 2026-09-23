@@ -13,7 +13,7 @@ use petgraph::Direction;
 use petgraph::graph::{DiGraph, NodeIndex};
 
 use crate::application_types::WorkingDir;
-use crate::domain_types::{Ticket, TicketId};
+use crate::domain_types::{Ticket, TicketId, TicketStatus};
 
 /// How a single `blocked_by` id resolves against the active ticket set.
 ///
@@ -22,8 +22,10 @@ use crate::domain_types::{Ticket, TicketId};
 /// or edge for now. This is the single seam later tickets widen: archived
 /// done (7se1mu) and archived non-done (xptucc) fall back to a lookup in
 /// `archived/`, and a genuinely unknown id (t9p76e) becomes a `Missing`
-/// stub. `list --unblocked` (rm49xa) is expected to call the same
-/// resolution function rather than reimplementing the rule.
+/// stub. `list --unblocked`'s in-active-set case (3p7tpt) already calls
+/// [`resolve_blocker`] via [`is_unblocked`]; its archived/missing case
+/// (rm49xa) is expected to widen the same resolution function rather than
+/// reimplementing the rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum BlockerResolution {
     /// Blocker is an active ticket — render an edge into it.
@@ -34,6 +36,29 @@ fn resolve_blocker(active: &HashMap<TicketId, Ticket>, id: &TicketId) -> Option<
     active
         .contains_key(id)
         .then(|| BlockerResolution::Active(id.clone()))
+}
+
+/// Whether a resolved blocker counts as satisfied — i.e. no longer blocks
+/// whatever depends on it. Only `done` ever satisfies a dependency; this is
+/// deliberately not an exhaustive match on `TicketStatus` so a newly added
+/// status (e.g. `review`) keeps blocking by default rather than needing this
+/// to be touched. Widened alongside `BlockerResolution` as later tickets add
+/// archived/missing variants (7se1mu, xptucc, t9p76e).
+fn blocker_satisfied(active: &HashMap<TicketId, Ticket>, resolution: &BlockerResolution) -> bool {
+    match resolution {
+        BlockerResolution::Active(id) => active[id].front_matter.status == TicketStatus::Done,
+    }
+}
+
+/// Whether every one of `ticket`'s blockers is satisfied (or there are
+/// none). This is the seam `list --unblocked` and `deps-graph` both defer
+/// to for "is this dependency resolved" — extend `resolve_blocker` and
+/// `blocker_satisfied` above rather than reimplementing this check.
+pub(crate) fn is_unblocked(active: &HashMap<TicketId, Ticket>, ticket: &Ticket) -> bool {
+    ticket.front_matter.blocked_by.iter().all(|blocker_id| {
+        resolve_blocker(active, blocker_id)
+            .is_some_and(|resolution| blocker_satisfied(active, &resolution))
+    })
 }
 
 /// The dependency graph: one node per active ticket, one edge per
@@ -116,7 +141,7 @@ impl DepsGraph {
     }
 }
 
-fn load_active(dir: &WorkingDir) -> Result<HashMap<TicketId, Ticket>> {
+pub(crate) fn load_active(dir: &WorkingDir) -> Result<HashMap<TicketId, Ticket>> {
     let mut map = HashMap::new();
     let all_dir = dir.all();
     if !all_dir.exists() {
