@@ -2,13 +2,13 @@
 id: 8wb1lh
 title: cargo test is permanently red from a date dependent tui snapshot
 type: bug
-status: todo
+status: in-progress
 tags:
 - test-health
 parent: null
 blocked_by: []
 created_at: 2026-09-23T10:30:40.691786Z
-updated_at: 2026-09-23T10:30:40.691786Z
+updated_at: 2026-09-23T10:31:14.073390Z
 ---
 
 ## Problem
