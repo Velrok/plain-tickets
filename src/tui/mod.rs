@@ -96,7 +96,11 @@ fn event_loop<B: ratatui::backend::Backend + std::io::Write>(
 
 fn key_to_message(code: KeyCode, screen: &Screen) -> Option<Message> {
     match screen {
-        Screen::Help => Some(Message::CloseOverlay),
+        // `/` does nothing here — filtering is board-only scope.
+        Screen::Help => match code {
+            KeyCode::Char('/') => None,
+            _ => Some(Message::CloseOverlay),
+        },
         Screen::Detail => match code {
             KeyCode::Char('q') | KeyCode::Esc => Some(Message::CloseOverlay),
             KeyCode::Char('e') => Some(Message::OpenEditor),
@@ -115,6 +119,17 @@ fn key_to_message(code: KeyCode, screen: &Screen) -> Option<Message> {
             KeyCode::Char('n') => Some(Message::NewTicket),
             KeyCode::Char('y') => Some(Message::CopyId),
             KeyCode::Char('?') | KeyCode::F(1) => Some(Message::ToggleHelp),
+            KeyCode::Char('/') => Some(Message::OpenFilter),
+            KeyCode::Esc => Some(Message::ClearFilter),
+            _ => None,
+        },
+        // Total key capture: every printable character is literal query text,
+        // never a command. Only Enter/Esc/Backspace are control keys here.
+        Screen::Filter => match code {
+            KeyCode::Enter => Some(Message::FilterCommit),
+            KeyCode::Esc => Some(Message::FilterCancel),
+            KeyCode::Backspace => Some(Message::FilterBackspace),
+            KeyCode::Char(c) => Some(Message::FilterInput(c)),
             _ => None,
         },
     }
@@ -390,6 +405,80 @@ mod tests {
         assert_eq!(
             key_to_message(KeyCode::Esc, &Screen::Help),
             Some(Message::CloseOverlay)
+        );
+    }
+
+    // ── filter mode ───────────────────────────────────────────────────────
+
+    #[test]
+    fn board_slash_enters_filter_mode() {
+        assert_eq!(
+            key_to_message(KeyCode::Char('/'), &Screen::Board),
+            Some(Message::OpenFilter)
+        );
+    }
+
+    #[test]
+    fn filter_mode_q_is_text_input_not_quit() {
+        assert_eq!(
+            key_to_message(KeyCode::Char('q'), &Screen::Filter),
+            Some(Message::FilterInput('q'))
+        );
+    }
+
+    #[test]
+    fn filter_mode_other_command_keys_are_also_text_input() {
+        // j/k/n/e must be literal query text while the prompt is open, not
+        // navigation/create/edit commands.
+        assert_eq!(
+            key_to_message(KeyCode::Char('j'), &Screen::Filter),
+            Some(Message::FilterInput('j'))
+        );
+        assert_eq!(
+            key_to_message(KeyCode::Char('k'), &Screen::Filter),
+            Some(Message::FilterInput('k'))
+        );
+        assert_eq!(
+            key_to_message(KeyCode::Char('n'), &Screen::Filter),
+            Some(Message::FilterInput('n'))
+        );
+        assert_eq!(
+            key_to_message(KeyCode::Char('e'), &Screen::Filter),
+            Some(Message::FilterInput('e'))
+        );
+    }
+
+    #[test]
+    fn filter_mode_esc_cancels_and_enter_commits() {
+        assert_eq!(
+            key_to_message(KeyCode::Esc, &Screen::Filter),
+            Some(Message::FilterCancel)
+        );
+        assert_eq!(
+            key_to_message(KeyCode::Enter, &Screen::Filter),
+            Some(Message::FilterCommit)
+        );
+    }
+
+    #[test]
+    fn filter_mode_backspace_deletes_a_character() {
+        assert_eq!(
+            key_to_message(KeyCode::Backspace, &Screen::Filter),
+            Some(Message::FilterBackspace)
+        );
+    }
+
+    #[test]
+    fn slash_in_detail_and_help_screens_produces_no_message() {
+        assert_eq!(key_to_message(KeyCode::Char('/'), &Screen::Detail), None);
+        assert_eq!(key_to_message(KeyCode::Char('/'), &Screen::Help), None);
+    }
+
+    #[test]
+    fn board_esc_maps_to_clear_filter() {
+        assert_eq!(
+            key_to_message(KeyCode::Esc, &Screen::Board),
+            Some(Message::ClearFilter)
         );
     }
 }

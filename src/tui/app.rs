@@ -11,6 +11,8 @@ pub enum Screen {
     Board,
     Detail,
     Help,
+    /// The `/` filter prompt is open; every printable key is literal text.
+    Filter,
 }
 
 pub struct App {
@@ -24,6 +26,9 @@ pub struct App {
     pub screen: Screen,
     /// Transient status bar message with the time it was set.
     pub flash: Option<(String, Instant)>,
+    /// Live filter query, matched case-insensitively against id and title.
+    /// Session-only: never persisted, cleared on restart.
+    pub filter: String,
 }
 
 impl App {
@@ -35,16 +40,20 @@ impl App {
             row: 0,
             screen: Screen::Board,
             flash: None,
+            filter: String::new(),
         }
     }
 
-    /// Indices into `self.tickets` for tickets belonging to column `col`.
+    /// Indices into `self.tickets` for tickets belonging to column `col`,
+    /// narrowed by the current filter query (if any).
     pub fn col_indices(&self, col: usize) -> Vec<usize> {
         let status = &self.columns[col];
+        let query = self.filter.to_lowercase();
         self.tickets
             .iter()
             .enumerate()
             .filter(|(_, t)| t.front_matter.status == *status)
+            .filter(|(_, t)| ticket_matches_query(t, &query))
             .map(|(i, _)| i)
             .collect()
     }
@@ -136,6 +145,59 @@ impl App {
             self.row = self.row.min(len - 1);
         }
     }
+
+    // ── filter mutators (called by update) ─────────────────────────────────
+
+    pub(super) fn open_filter(&mut self) {
+        self.screen = Screen::Filter;
+    }
+
+    /// Append a character to the live filter query and re-clamp focus.
+    pub(super) fn push_filter_char(&mut self, c: char) {
+        self.filter.push(c);
+        self.clamp_row();
+    }
+
+    /// Remove the last character from the live filter query and re-clamp focus.
+    pub(super) fn pop_filter_char(&mut self) {
+        self.filter.pop();
+        self.clamp_row();
+    }
+
+    /// `Enter` from the prompt: keep the query, return to normal navigation.
+    pub(super) fn commit_filter(&mut self) {
+        self.screen = Screen::Board;
+    }
+
+    /// `Esc` from the prompt: discard the query entirely, even one that was
+    /// already active before the prompt was opened.
+    pub(super) fn cancel_filter(&mut self) {
+        self.filter.clear();
+        self.screen = Screen::Board;
+        self.clamp_row();
+    }
+
+    /// `Esc` from the board with an active filter: clear it. No-op otherwise.
+    pub(super) fn clear_filter(&mut self) {
+        if !self.filter.is_empty() {
+            self.filter.clear();
+            self.clamp_row();
+        }
+    }
+}
+
+/// A ticket matches an already-lower-cased query if it contains it in either
+/// the id or the title (case-insensitive). An empty query matches everything.
+fn ticket_matches_query(ticket: &Ticket, query_lower: &str) -> bool {
+    if query_lower.is_empty() {
+        return true;
+    }
+    let id = ticket.front_matter.id.to_string().to_lowercase();
+    if id.contains(query_lower) {
+        return true;
+    }
+    let title = ticket.front_matter.title.to_string().to_lowercase();
+    title.contains(query_lower)
 }
 
 // ── Message ───────────────────────────────────────────────────────────────────
@@ -156,6 +218,18 @@ pub enum Message {
     ToggleHelp,
     CopyId,
     Quit,
+    /// `/` from the board: open the filter prompt.
+    OpenFilter,
+    /// A literal character typed while the filter prompt is open.
+    FilterInput(char),
+    /// `Backspace` while the filter prompt is open.
+    FilterBackspace,
+    /// `Enter` from the filter prompt: keep the query, return to the board.
+    FilterCommit,
+    /// `Esc` from the filter prompt: discard the query, return to the board.
+    FilterCancel,
+    /// `Esc` from the board: clear an active filter (no-op if none).
+    ClearFilter,
 }
 
 // ── Cmd ───────────────────────────────────────────────────────────────────────
@@ -191,6 +265,25 @@ pub fn update(app: &mut App, msg: Message) -> Cmd {
                 Cmd::None
             }
             Message::OpenEditor => Cmd::OpenEditor,
+            _ => Cmd::None,
+        },
+        Screen::Filter => match msg {
+            Message::FilterInput(c) => {
+                app.push_filter_char(c);
+                Cmd::None
+            }
+            Message::FilterBackspace => {
+                app.pop_filter_char();
+                Cmd::None
+            }
+            Message::FilterCommit => {
+                app.commit_filter();
+                Cmd::None
+            }
+            Message::FilterCancel => {
+                app.cancel_filter();
+                Cmd::None
+            }
             _ => Cmd::None,
         },
         Screen::Board => match msg {
@@ -245,6 +338,16 @@ pub fn update(app: &mut App, msg: Message) -> Cmd {
                     Cmd::None
                 }
             }
+            Message::OpenFilter => {
+                app.open_filter();
+                Cmd::None
+            }
+            Message::ClearFilter => {
+                app.clear_filter();
+                Cmd::None
+            }
+            // Filter-editing messages only ever arrive on Screen::Filter.
+            _ => Cmd::None,
         },
     }
 }
@@ -559,5 +662,177 @@ mod tests {
         app.row = 1;
         app.set_tickets(vec![make_ticket("a", "First", TicketStatus::Todo)]);
         assert_eq!(app.row, 0);
+    }
+
+    // ── filter ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn col_indices_returns_only_tickets_matching_the_query() {
+        let tickets = vec![
+            make_ticket("a", "Fix login bug", TicketStatus::Todo),
+            make_ticket("b", "Add search", TicketStatus::Todo),
+            make_ticket("c", "Fix payments", TicketStatus::Todo),
+        ];
+        let mut app = App::new(tickets, default_columns());
+        app.filter = "fix".to_string();
+        let indices = app.col_indices(0);
+        assert_eq!(indices.len(), 2);
+        for i in indices {
+            assert!(
+                app.tickets[i]
+                    .front_matter
+                    .title
+                    .to_string()
+                    .contains("Fix")
+            );
+        }
+    }
+
+    #[test]
+    fn col_indices_matches_id_or_title_independently() {
+        let tickets = vec![
+            make_ticket("abc999", "Nothing special", TicketStatus::Todo),
+            make_ticket("xyz111", "abc widget", TicketStatus::Todo),
+            make_ticket("qqq222", "Unrelated", TicketStatus::Todo),
+        ];
+        let mut app = App::new(tickets, default_columns());
+        app.filter = "abc".to_string();
+        let indices = app.col_indices(0);
+        let matched_ids: Vec<String> = indices
+            .iter()
+            .map(|&i| app.tickets[i].front_matter.id.to_string())
+            .collect();
+        // Matches via id (abc999) and via title (xyz111 has "abc widget"),
+        // but not the unrelated third ticket.
+        assert!(matched_ids.contains(&"abc999".to_string()));
+        assert!(matched_ids.contains(&"xyz111".to_string()));
+        assert_eq!(matched_ids.len(), 2);
+    }
+
+    #[test]
+    fn col_indices_query_is_case_insensitive() {
+        let tickets = vec![
+            make_ticket("ABC123", "Fix Login Bug", TicketStatus::Todo),
+            make_ticket("def456", "Unrelated", TicketStatus::Todo),
+        ];
+        let mut app = App::new(tickets, default_columns());
+
+        // Lowercase query matches mixed-case title.
+        app.filter = "login".to_string();
+        assert_eq!(app.col_indices(0).len(), 1);
+
+        // Uppercase query matches lowercase id.
+        app.filter = "ABC123".to_string();
+        assert_eq!(app.col_indices(0).len(), 1);
+    }
+
+    #[test]
+    fn row_is_clamped_when_the_filter_shrinks_the_focused_column() {
+        let tickets = vec![
+            make_ticket("a", "Fix login", TicketStatus::Todo),
+            make_ticket("b", "Fix search", TicketStatus::Todo),
+            make_ticket("c", "Unrelated", TicketStatus::Todo),
+        ];
+        let mut app = App::new(tickets, default_columns());
+        app.row = 2; // focused on "Unrelated"
+        app.push_filter_char('f');
+        app.push_filter_char('i');
+        app.push_filter_char('x');
+        // Only 2 tickets match "fix" now; row must be clamped into range.
+        assert_eq!(app.col_indices(app.col).len(), 2);
+        assert_eq!(app.row, 1);
+    }
+
+    #[test]
+    fn focused_ticket_none_and_no_key_panics_when_nothing_matches() {
+        let tickets = vec![
+            make_ticket("a", "Fix login", TicketStatus::Todo),
+            make_ticket("b", "Fix search", TicketStatus::InProgress),
+        ];
+        let mut app = App::new(tickets, default_columns());
+        app.row = 1;
+        app.filter = "nonexistent-query".to_string();
+        app.clamp_row();
+
+        assert!(app.focused_ticket().is_none());
+        assert_eq!(app.col_indices(0).len(), 0);
+
+        // Enter/y/e all route through focused_ticket() / focused_ticket_index()
+        // and must be safe no-ops; H/L move must also be safe no-ops.
+        assert_eq!(update(&mut app, Message::OpenDetail), Cmd::None);
+        assert_eq!(app.screen, Screen::Board);
+        assert_eq!(update(&mut app, Message::CopyId), Cmd::None);
+        assert_eq!(update(&mut app, Message::OpenEditor), Cmd::OpenEditor);
+        assert_eq!(update(&mut app, Message::MoveTicketLeft), Cmd::None);
+        assert_eq!(update(&mut app, Message::MoveTicketRight), Cmd::None);
+    }
+
+    // ── filter mode transitions via update ──────────────────────────────
+
+    #[test]
+    fn update_open_filter_switches_to_filter_screen() {
+        let mut app = App::new(vec![], default_columns());
+        update(&mut app, Message::OpenFilter);
+        assert_eq!(app.screen, Screen::Filter);
+    }
+
+    #[test]
+    fn update_filter_input_appends_live_and_narrows_board() {
+        let tickets = vec![
+            make_ticket("a", "Fix login", TicketStatus::Todo),
+            make_ticket("b", "Unrelated", TicketStatus::Todo),
+        ];
+        let mut app = App::new(tickets, default_columns());
+        app.screen = Screen::Filter;
+        update(&mut app, Message::FilterInput('f'));
+        update(&mut app, Message::FilterInput('i'));
+        update(&mut app, Message::FilterInput('x'));
+        assert_eq!(app.filter, "fix");
+        assert_eq!(app.col_indices(0).len(), 1);
+    }
+
+    #[test]
+    fn update_filter_backspace_removes_last_character() {
+        let mut app = App::new(vec![], default_columns());
+        app.screen = Screen::Filter;
+        app.filter = "fix".to_string();
+        update(&mut app, Message::FilterBackspace);
+        assert_eq!(app.filter, "fi");
+    }
+
+    #[test]
+    fn update_filter_commit_keeps_query_and_returns_to_board() {
+        let mut app = App::new(vec![], default_columns());
+        app.screen = Screen::Filter;
+        app.filter = "fix".to_string();
+        update(&mut app, Message::FilterCommit);
+        assert_eq!(app.screen, Screen::Board);
+        assert_eq!(app.filter, "fix");
+    }
+
+    #[test]
+    fn update_filter_cancel_clears_query_even_if_active_before_prompt_opened() {
+        let mut app = App::new(vec![], default_columns());
+        app.filter = "already active".to_string();
+        app.screen = Screen::Filter;
+        update(&mut app, Message::FilterCancel);
+        assert_eq!(app.screen, Screen::Board);
+        assert_eq!(app.filter, "");
+    }
+
+    #[test]
+    fn update_clear_filter_from_board_clears_active_filter() {
+        let mut app = App::new(vec![], default_columns());
+        app.filter = "fix".to_string();
+        update(&mut app, Message::ClearFilter);
+        assert_eq!(app.filter, "");
+    }
+
+    #[test]
+    fn update_clear_filter_from_board_is_no_op_when_no_filter_active() {
+        let mut app = App::new(vec![], default_columns());
+        let cmd = update(&mut app, Message::ClearFilter);
+        assert_eq!(cmd, Cmd::None);
+        assert_eq!(app.filter, "");
     }
 }

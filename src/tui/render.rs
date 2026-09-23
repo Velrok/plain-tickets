@@ -24,10 +24,17 @@ pub fn view(f: &mut Frame, app: &App) {
             draw_board(f, app);
             draw_help(f);
         }
+        // No overlay: the filter prompt replaces the footer hint in-place.
+        Screen::Filter => draw_board(f, app),
     }
 }
 
 // ── board ─────────────────────────────────────────────────────────────────────
+
+/// Default footer hint. Single-space separated (the previous double-space
+/// grouping no longer fit at 80 columns once `/ filter` was added).
+const DEFAULT_FOOTER_HINT: &str =
+    "h/l col j/k row H/L mv y copy Enter view e edit n new / filter ? help q quit";
 
 fn draw_board(f: &mut Frame, app: &App) {
     if app.columns.is_empty() {
@@ -92,14 +99,22 @@ fn draw_board(f: &mut Frame, app: &App) {
         f.render_widget(Paragraph::new(label_text).style(label_style), label_area);
     }
 
-    // Footer: show flash message for 2 s, then fall back to hint.
+    // Footer: flash message (2 s) > filter prompt/indicator > default hint.
     const FLASH_DURATION: Duration = Duration::from_secs(2);
-    let footer_text = app
+    let footer_text: String = if let Some(msg) = app
         .flash
         .as_ref()
         .filter(|(_, t)| t.elapsed() < FLASH_DURATION)
-        .map(|(msg, _)| msg.as_str())
-        .unwrap_or("h/l columns  j/k tickets  H/L move  y copy id  Enter detail  e edit  n new  ? help  q quit");
+        .map(|(msg, _)| msg.clone())
+    {
+        msg
+    } else if app.screen == Screen::Filter {
+        format!("/{}", app.filter)
+    } else if !app.filter.is_empty() {
+        format!("filter: \"{}\"  (Esc clears)", app.filter)
+    } else {
+        DEFAULT_FOOTER_HINT.to_string()
+    };
     let footer = Paragraph::new(footer_text).style(Style::default().fg(Color::DarkGray));
     f.render_widget(footer, footer_area);
 }
@@ -176,6 +191,7 @@ fn draw_help(f: &mut Frame) {
         Line::from("  e          open in editor"),
         Line::from("  n          new ticket"),
         Line::from("  y          copy ticket id"),
+        Line::from("  /          filter by id/title"),
         Line::from("  ? / F1     show this help"),
         Line::from("  q          quit"),
         Line::from(""),
@@ -625,6 +641,44 @@ mod tests {
         let mut app = App::new(tickets, columns);
         app.screen = Screen::Detail;
         let output = render_to_string(&app, 80, 24);
+        insta::assert_snapshot!(output);
+    }
+
+    // ── filter ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn board_renders_filter_prompt_while_typing() {
+        let columns = vec![
+            TicketStatus::Todo,
+            TicketStatus::InProgress,
+            TicketStatus::Done,
+        ];
+        let tickets = vec![
+            make_ticket("aaa111", "Fix login bug", TicketStatus::Todo),
+            make_ticket("bbb222", "Add search", TicketStatus::InProgress),
+        ];
+        let mut app = App::new(tickets, columns);
+        app.screen = Screen::Filter;
+        app.filter = "log".to_string();
+        let output = render_to_string(&app, 80, 20);
+        insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn board_renders_active_filter_indicator_after_enter() {
+        let columns = vec![
+            TicketStatus::Todo,
+            TicketStatus::InProgress,
+            TicketStatus::Done,
+        ];
+        let tickets = vec![
+            make_ticket("aaa111", "Fix login bug", TicketStatus::Todo),
+            make_ticket("bbb222", "Add search", TicketStatus::InProgress),
+        ];
+        let mut app = App::new(tickets, columns);
+        app.screen = Screen::Board;
+        app.filter = "log".to_string();
+        let output = render_to_string(&app, 80, 20);
         insta::assert_snapshot!(output);
     }
 
