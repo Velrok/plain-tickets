@@ -16,6 +16,9 @@ pub struct ListArgs {
     /// Filter by tag (repeatable, AND semantics)
     #[arg(long)]
     pub tag: Vec<Tag>,
+    /// Only list tickets with no unfinished blockers
+    #[arg(long)]
+    pub unblocked: bool,
 }
 
 pub struct WorkingDir(PathBuf);

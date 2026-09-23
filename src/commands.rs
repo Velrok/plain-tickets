@@ -241,6 +241,11 @@ fn matches_filters(
 
 pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
     let all_dir = dir.all();
+    let active = args
+        .unblocked
+        .then(|| deps_graph::load_active(&dir))
+        .transpose()?;
+
     let mut tickets: Vec<Ticket> = std::fs::read_dir(&all_dir)
         .with_context(|| format!("could not read directory {}", all_dir.display()))?
         .flatten()
@@ -248,6 +253,11 @@ pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
         .filter_map(|e| std::fs::read_to_string(e.path()).ok())
         .filter_map(|raw| raw.parse::<Ticket>().ok())
         .filter(|t| matches_filters(t, &args.status, &args.r#type, &args.tag))
+        .filter(|t| {
+            active
+                .as_ref()
+                .is_none_or(|active| deps_graph::is_unblocked(active, t))
+        })
         .collect();
 
     tickets.sort_by(|a, b| {
