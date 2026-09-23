@@ -241,9 +241,13 @@ fn matches_filters(
 
 pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
     let all_dir = dir.all();
-    let active = args
+    let unblocked_ctx = args
         .unblocked
-        .then(|| deps_graph::load_active(&dir))
+        .then(|| -> Result<_> {
+            let active = deps_graph::load_active(&dir)?;
+            let archived = deps_graph::load_archived(&dir)?;
+            Ok((active, archived))
+        })
         .transpose()?;
 
     let mut tickets: Vec<Ticket> = std::fs::read_dir(&all_dir)
@@ -254,9 +258,9 @@ pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
         .filter_map(|raw| raw.parse::<Ticket>().ok())
         .filter(|t| matches_filters(t, &args.status, &args.r#type, &args.tag))
         .filter(|t| {
-            active
+            unblocked_ctx
                 .as_ref()
-                .is_none_or(|active| deps_graph::is_unblocked(active, t))
+                .is_none_or(|(active, archived)| deps_graph::is_unblocked(active, archived, t))
         })
         .collect();
 
