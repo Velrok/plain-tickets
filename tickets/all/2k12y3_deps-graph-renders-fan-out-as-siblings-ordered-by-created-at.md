@@ -2,14 +2,14 @@
 id: 2k12y3
 title: deps-graph renders fan-out as siblings ordered by created_at
 type: task
-status: draft
+status: todo
 tags:
 - deps-graph
 parent: fyihf8
 blocked_by:
 - ihqh45
 created_at: 2026-09-23T10:13:43.435948Z
-updated_at: 2026-09-23T10:13:43.435948Z
+updated_at: 2026-09-23T10:28:41.982562Z
 ---
 
 ## Behaviour
