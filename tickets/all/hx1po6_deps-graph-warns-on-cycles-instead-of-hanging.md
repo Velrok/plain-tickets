@@ -2,14 +2,14 @@
 id: hx1po6
 title: deps-graph warns on cycles instead of hanging
 type: task
-status: draft
+status: todo
 tags:
 - deps-graph
 parent: fyihf8
 blocked_by:
 - ihqh45
 created_at: 2026-09-23T10:13:43.939887Z
-updated_at: 2026-09-23T10:13:43.939887Z
+updated_at: 2026-09-23T10:28:42.480502Z
 ---
 
 ## Behaviour
