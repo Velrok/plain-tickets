@@ -2,13 +2,13 @@
 id: 8wb1lh
 title: cargo test is permanently red from a date dependent tui snapshot
 type: bug
-status: in-progress
+status: done
 tags:
 - test-health
 parent: null
 blocked_by: []
 created_at: 2026-09-23T10:30:40.691786Z
-updated_at: 2026-09-23T10:38:44.943495Z
+updated_at: 2026-09-23T10:41:10.016510Z
 ---
 
 ## Problem
@@ -135,3 +135,52 @@ suite itself rather than to new product code.
   0 failed, 0 ignored. `cargo clippy --all-targets -- -D warnings` - clean.
   `cargo fmt --check` - clean. `git status --porcelain` after the full test
   run showed only the two intended source changes, no stray `.snap.new`.
+
+## Follow-up (reopened after independent verification)
+
+Independent verification confirmed the `src/tui/render.rs` fix itself is
+correct (186 passed, 0 failed from a pristine worktree at HEAD), but found a
+second instance of the same bug class and one inconsistency. Both addressed
+here.
+
+- **Correction to the note above**: I previously said the re-recorded
+  snapshot's `assertion_line` field was stripped "to match the sibling
+  snapshots' format". `git show 4881a13` shows the committed diff touches
+  only the two `Created:`/`Updated:` lines - the header was byte-identical
+  before and after. That field only ever existed in the transient
+  `.snap.new` insta produced mid-run and never reached the committed file,
+  so there was nothing to strip from the commit. No functional impact, but
+  the earlier note overstated what the diff contains.
+
+- **`tests/cli_show.rs:141`** (the actual miss - same bug class, a fixture
+  timestamp reaching an assertion via a hardcoded year):
+
+  - Before: `assert!(stdout.contains("2026-"), "expected date in output");`
+    - passes today, starts failing 2027-01-01, reproducing the exact
+      permanently-red-suite problem this ticket exists to eliminate.
+  - After: `assert!(contains_date_shape(&stdout), "expected date in output");`, where `contains_date_shape` (added to `tests/cli_show.rs`)
+    scans for a `YYYY-MM-DD`-shaped substring (four digits, `-`, two digits,
+    `-`, two digits) without pinning to any specific year. Verified
+    standalone that it matches real dated output and still rejects
+    non-dated strings, so the assertion stays meaningful rather than
+    becoming a no-op.
+
+- **`src/tui/app.rs:262`**: confirmed (as the reopening note said) this
+  fixture's `Utc::now()` doesn't reach any assertion in that module today -
+  none of `app.rs`'s tests assert on `created_at`/`updated_at` - so it
+  wasn't a live defect. Normalised anyway for consistency: added the same
+  `fixed_timestamp()` helper (built via `Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0)`) to `app.rs`'s own `#[cfg(test)] mod tests`, and pointed
+  `make_ticket` at it. Verdict on sharing one helper across `render.rs` and
+  `app.rs`: not worth doing - `render`/`app` are sibling private modules
+  under `tui`, so reusing `render`'s helper from `app` would need bumping
+  both the `tests` module and the function to `pub(crate)`, poking a
+  visibility hole through a private module boundary for a two-line
+  test-only helper. The codebase already duplicates its `make_ticket`
+  fixture per test module rather than sharing it, so a small local
+  `fixed_timestamp()` duplicate in `app.rs` matches the existing
+  convention.
+
+- Final verification after the follow-up: `cargo test` - 186 passed, 0
+  failed, 0 ignored, across all suites. `cargo clippy --all-targets -- -D warnings` - clean. `cargo fmt --check` - clean. `git status --porcelain`
+  after the full run - only `src/tui/app.rs` and `tests/cli_show.rs`
+  changed, no stray `.snap.new`.
