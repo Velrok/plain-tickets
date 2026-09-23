@@ -2,14 +2,14 @@
 id: 0awkzp
 title: list --unblocked composes with status type and tag filters
 type: task
-status: todo
+status: in-progress
 tags:
 - deps-graph
 parent: fyihf8
 blocked_by:
 - 3p7tpt
 created_at: 2026-09-23T10:14:02.562292Z
-updated_at: 2026-09-23T10:28:42.704034Z
+updated_at: 2026-09-23T11:06:24.869610Z
 ---
 
 ## Behaviour
