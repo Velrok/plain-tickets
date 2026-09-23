@@ -79,3 +79,66 @@ helper this ticket introduces is what would fix it.
 `deps-graph`, `show` and the TUI keep their current rendering. This ticket
 only changes `list`, but the type-to-emoji mapping it introduces should be
 placed where those can adopt it later.
+
+## Implementation notes
+
+### src/domain_types.rs
+
+- `pub fn display_width(s: &str) -> usize` wrapping
+  `unicode_width::UnicodeWidthStr::width`, doc-commented with why byte length
+  and char count are both wrong.
+- `impl TicketType { pub fn emoji(&self) -> &'static str }` - exhaustive match
+  (desirable here, `TicketType` is a closed set and the compiler should shout
+  if a type is added). 🎯 epic, 📖 story, 🔧 task, 🐛 bug. Single source of
+  truth, reusable by `deps-graph`, `show` and the TUI later.
+
+### src/commands.rs
+
+`cmd_list`'s width block now builds `(id, status, type_col, title)` rows up
+front, where `type_col = format!("{} {}", r#type.emoji(), r#type)` - emoji
+alongside the word, never replacing it, so `tickets list | rg bug` still
+works. All widths come from `display_width`, and a private
+`pad_to_display_width(s, width)` pads by hand rather than using Rust's
+formatter, which pads by `char` count and cannot safely be handed a
+display-width number.
+
+`unicode-width = "0.2"` added to `Cargo.toml`. The `Cargo.lock` diff is a
+single line - the crate was already locked transitively via ratatui.
+
+### Finding - the row-alignment test cannot catch this bug
+
+Every `TicketType` contributes exactly one emoji, so the byte-versus-char
+discrepancy is **uniform across every row** and cancels out in relative
+terms. Reverting to the buggy `.to_string().len()` code and running
+`list_title_column_aligns_across_mixed_type_widths` showed it **passing
+against the bug**.
+
+What the bug actually does is over-pad every row by a constant amount -
+wasted whitespace, not raggedness. Hence
+`list_widest_type_column_has_no_wasted_padding`, which asserts the gap after
+the widest row's type text is exactly the two-space separator. Confirmed RED
+against the byte-length bug (5 spaces instead of 2) and GREEN after the fix.
+
+Both tests were kept; the alignment one is still a legitimate regression
+check. The caveat is specific to columns carrying exactly one wide glyph per
+row.
+
+### Note for 3mqhe3
+
+The block is now: build `rows` -> compute widths via `display_width` -> print
+via `pad_to_display_width`. Colouring the status will need padding computed on
+the **plain** text before colouring, or escape codes stripped before
+measuring - `unicode-width` does not account for ANSI sequences.
+
+Unlike this ticket, a status column carries a *variable* number of
+zero-width escape bytes per row, so row-alignment tests likely **would** catch
+a mistake there.
+
+### Tests
+
+Unit: `display_width_ascii_char_is_one`, `display_width_emoji_is_two`,
+`ticket_type_emoji_is_distinct_per_type`.
+E2e: `list_shows_emoji_for_each_ticket_type`,
+`list_type_word_still_present_alongside_emoji`,
+`list_title_column_aligns_across_mixed_type_widths`,
+`list_widest_type_column_has_no_wasted_padding`.
