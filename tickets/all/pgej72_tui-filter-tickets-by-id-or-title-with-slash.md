@@ -2,13 +2,13 @@
 id: pgej72
 title: TUI filter tickets by id or title with slash
 type: story
-status: in-progress
+status: review
 tags:
 - tui
 parent: null
 blocked_by: []
 created_at: 2026-09-23T10:51:52.149259Z
-updated_at: 2026-09-23T11:06:26.061456Z
+updated_at: 2026-09-23T11:12:24.680438Z
 ---
 
 ## Behaviour
