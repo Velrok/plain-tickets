@@ -2,7 +2,7 @@
 id: 0mvwz9
 title: Package the tickets-cli-expert skill in the binary and print it with tickets ai-skill
 type: story
-status: draft
+status: todo
 tags:
 - ai-skill
 - docs
@@ -10,7 +10,7 @@ parent: null
 blocked_by:
 - fe17ed
 created_at: 2026-09-23T10:23:03.398998Z
-updated_at: 2026-09-23T10:23:03.398998Z
+updated_at: 2026-09-23T10:28:42.836454Z
 ---
 
 ## Goal
