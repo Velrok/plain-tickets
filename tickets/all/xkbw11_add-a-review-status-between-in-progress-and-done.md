@@ -2,13 +2,13 @@
 id: xkbw11
 title: Add a review status between in-progress and done
 type: task
-status: review
+status: done
 tags:
 - workflow
 parent: null
 blocked_by: []
 created_at: 2026-09-23T10:28:20.779278Z
-updated_at: 2026-09-23T10:51:32.976995Z
+updated_at: 2026-09-23T11:00:02.358028Z
 ---
 
 ## Why
