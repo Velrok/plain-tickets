@@ -175,28 +175,82 @@ fn draw_detail(f: &mut Frame, app: &App) {
 
 // ── help overlay ──────────────────────────────────────────────────────────────
 
-fn draw_help(f: &mut Frame) {
-    let area = centered_rect(46, 60, f.area());
+/// `(key, description)` pairs shown in the help overlay, in display order.
+const HELP_KEYBINDINGS: &[(&str, &str)] = &[
+    ("h / ←", "move focus left"),
+    ("l / →", "move focus right"),
+    ("j / ↓", "move focus down"),
+    ("k / ↑", "move focus up"),
+    ("H", "move ticket left"),
+    ("L", "move ticket right"),
+    ("Enter/Spc", "open detail view"),
+    ("e", "open in editor"),
+    ("n", "new ticket"),
+    ("y", "copy ticket id"),
+    ("/", "filter by id/title"),
+    ("? / F1", "show this help"),
+    ("q", "quit"),
+];
 
-    let lines = vec![
-        Line::from("  Keybindings"),
-        Line::from(""),
-        Line::from("  h / ←      move focus left"),
-        Line::from("  l / →      move focus right"),
-        Line::from("  j / ↓      move focus down"),
-        Line::from("  k / ↑      move focus up"),
-        Line::from("  H          move ticket left"),
-        Line::from("  L          move ticket right"),
-        Line::from("  Enter/Spc  open detail view"),
-        Line::from("  e          open in editor"),
-        Line::from("  n          new ticket"),
-        Line::from("  y          copy ticket id"),
-        Line::from("  /          filter by id/title"),
-        Line::from("  ? / F1     show this help"),
-        Line::from("  q          quit"),
-        Line::from(""),
-        Line::from("  [any key]  dismiss"),
-    ];
+/// Width of the key column before the description, in the single-column
+/// layout (matches the longest key, "Enter/Spc").
+const KEY_COL_WIDTH: usize = 11;
+
+/// Full single-column layout: one line per keybinding.
+fn help_lines_single() -> Vec<Line<'static>> {
+    let mut lines = vec![Line::from("  Keybindings"), Line::from("")];
+    for (key, desc) in HELP_KEYBINDINGS {
+        lines.push(Line::from(format!("  {key:<KEY_COL_WIDTH$}{desc}")));
+    }
+    lines.push(Line::from(""));
+    lines.push(Line::from("  [any key]  dismiss"));
+    lines
+}
+
+/// Compact two-column layout: same keybindings, roughly half the height.
+/// Used only when the terminal is too short for the single-column layout, so
+/// the whole list still fits with no clipping.
+fn help_lines_compact() -> Vec<Line<'static>> {
+    let desc_col_width = HELP_KEYBINDINGS
+        .iter()
+        .map(|(_, desc)| desc.len())
+        .max()
+        .unwrap_or(0);
+    let split = HELP_KEYBINDINGS.len().div_ceil(2);
+    let (left, right) = HELP_KEYBINDINGS.split_at(split);
+
+    let mut lines = vec![Line::from("  Keybindings"), Line::from("")];
+    for (i, &(lk, ld)) in left.iter().enumerate() {
+        let row = match right.get(i) {
+            Some((rk, rd)) => {
+                format!("  {lk:<KEY_COL_WIDTH$}{ld:<desc_col_width$}  {rk:<KEY_COL_WIDTH$}{rd}")
+            }
+            None => format!("  {lk:<KEY_COL_WIDTH$}{ld}"),
+        };
+        lines.push(Line::from(row));
+    }
+    lines.push(Line::from(""));
+    lines.push(Line::from("  [any key]  dismiss"));
+    lines
+}
+
+fn draw_help(f: &mut Frame) {
+    let full_area = f.area();
+
+    // Prefer the single-column layout; only fall back to the compact
+    // two-column one when the terminal is too short for it, so every
+    // keybinding stays visible either way - never silently clipped.
+    let single = help_lines_single();
+    let lines = if single.len() as u16 + 2 <= full_area.height {
+        single
+    } else {
+        help_lines_compact()
+    };
+
+    let height = lines.len() as u16 + 2; // + top/bottom border
+    let content_width = lines.iter().map(|l| l.width() as u16).max().unwrap_or(0);
+    let width = content_width + 4; // + left/right border and one column of padding each side
+    let area = centered_rect_fixed(width, height, full_area);
 
     let block = Block::default().title("  Help  ").borders(Borders::ALL);
     let para = Paragraph::new(Text::from(lines)).block(block);
@@ -387,6 +441,21 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+/// Centres a box of an exact `width`/`height` within `r`, clamping both to
+/// `r`'s bounds so the box never renders outside the terminal.
+fn centered_rect_fixed(width: u16, height: u16, r: Rect) -> Rect {
+    let width = width.min(r.width);
+    let height = height.min(r.height);
+    let x = r.x + (r.width - width) / 2;
+    let y = r.y + (r.height - height) / 2;
+    Rect {
+        x,
+        y,
+        width,
+        height,
+    }
 }
 
 // ── snapshot tests ────────────────────────────────────────────────────────────
@@ -692,6 +761,78 @@ mod tests {
         let mut app = App::new(vec![], columns);
         app.screen = Screen::Help;
         let output = render_to_string(&app, 80, 24);
+        insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn help_overlay_shows_quit_keybinding_at_80x24() {
+        let columns = vec![
+            TicketStatus::Todo,
+            TicketStatus::InProgress,
+            TicketStatus::Done,
+        ];
+        let mut app = App::new(vec![], columns);
+        app.screen = Screen::Help;
+        let output = render_to_string(&app, 80, 24);
+        assert!(
+            output.contains("q          quit"),
+            "quit keybinding not visible: {}",
+            output
+        );
+    }
+
+    #[test]
+    fn help_overlay_shows_dismiss_line_at_80x24() {
+        let columns = vec![
+            TicketStatus::Todo,
+            TicketStatus::InProgress,
+            TicketStatus::Done,
+        ];
+        let mut app = App::new(vec![], columns);
+        app.screen = Screen::Help;
+        let output = render_to_string(&app, 80, 24);
+        assert!(
+            output.contains("[any key]  dismiss"),
+            "dismiss line not visible: {}",
+            output
+        );
+    }
+
+    /// Terminal too short for the single-column layout (needs 19 rows):
+    /// the overlay must switch to the compact two-column layout rather than
+    /// clip, so every keybinding stays visible.
+    #[test]
+    fn help_overlay_switches_to_compact_layout_on_short_terminal() {
+        let columns = vec![
+            TicketStatus::Todo,
+            TicketStatus::InProgress,
+            TicketStatus::Done,
+        ];
+        let mut app = App::new(vec![], columns);
+        app.screen = Screen::Help;
+        let output = render_to_string(&app, 80, 15);
+        for (key, _) in HELP_KEYBINDINGS {
+            assert!(
+                output.contains(key),
+                "keybinding '{key}' not visible at 80x15: {output}"
+            );
+        }
+        assert!(
+            output.contains("dismiss"),
+            "dismiss line not visible at 80x15: {output}"
+        );
+    }
+
+    #[test]
+    fn help_overlay_compact_layout_renders_correctly() {
+        let columns = vec![
+            TicketStatus::Todo,
+            TicketStatus::InProgress,
+            TicketStatus::Done,
+        ];
+        let mut app = App::new(vec![], columns);
+        app.screen = Screen::Help;
+        let output = render_to_string(&app, 80, 15);
         insta::assert_snapshot!(output);
     }
 }

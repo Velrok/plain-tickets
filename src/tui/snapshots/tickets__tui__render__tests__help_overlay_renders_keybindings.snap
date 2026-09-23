@@ -4,25 +4,25 @@ expression: output
 ---
 todo                       in-progress               done
 
-
-
-
-                      ┌  Help  ──────────────────────────┐
-                      │  Keybindings                     │
-                      │                                  │
-                      │  h / ←      move focus left      │
-                      │  l / →      move focus right     │
-                      │  j / ↓      move focus down      │
-                      │  k / ↑      move focus up        │
-                      │  H          move ticket left     │
-                      │  L          move ticket right    │
-                      │  Enter/Spc  open detail view     │
-                      │  e          open in editor       │
-                      │  n          new ticket           │
-                      │  y          copy ticket id       │
-                      └──────────────────────────────────┘
-
-
+                      ┌  Help  ─────────────────────────┐
+                      │  Keybindings                    │
+                      │                                 │
+                      │  h / ←      move focus left     │
+                      │  l / →      move focus right    │
+                      │  j / ↓      move focus down     │
+                      │  k / ↑      move focus up       │
+                      │  H          move ticket left    │
+                      │  L          move ticket right   │
+                      │  Enter/Spc  open detail view    │
+                      │  e          open in editor      │
+                      │  n          new ticket          │
+                      │  y          copy ticket id      │
+                      │  /          filter by id/title  │
+                      │  ? / F1     show this help      │
+                      │  q          quit                │
+                      │                                 │
+                      │  [any key]  dismiss             │
+                      └─────────────────────────────────┘
 
 
 h/l col j/k row H/L mv y copy Enter view e edit n new / filter ? help q quit

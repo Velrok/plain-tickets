@@ -1,0 +1,19 @@
+---
+source: src/tui/render.rs
+expression: output
+---
+todo                       in-progress               done
+       ┌  Help  ────────────────────────────────────────────────────────┐
+       │  Keybindings                                                   │
+       │                                                                │
+       │  h / ←      move focus left     e          open in editor      │
+       │  l / →      move focus right    n          new ticket          │
+       │  j / ↓      move focus down     y          copy ticket id      │
+       │  k / ↑      move focus up       /          filter by id/title  │
+       │  H          move ticket left    ? / F1     show this help      │
+       │  L          move ticket right   q          quit                │
+       │  Enter/Spc  open detail view                                   │
+       │                                                                │
+       │  [any key]  dismiss                                            │
+       └────────────────────────────────────────────────────────────────┘
+h/l col j/k row H/L mv y copy Enter view e edit n new / filter ? help q quit
