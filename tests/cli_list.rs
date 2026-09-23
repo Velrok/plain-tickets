@@ -22,6 +22,27 @@ fn list_filter_status_returns_matching_only() {
 }
 
 #[test]
+fn list_filter_status_review_returns_matching_only() {
+    let dir = common::test_dir("list_filter_status_review_returns_matching_only");
+    common::tickets(&dir, &["init"]);
+    let (id_review, _) = common::create_ticket(&dir, "Review ticket");
+    common::tickets(&dir, &["edit", &id_review, "--status", "review"]);
+    let (_id_todo, _) = common::create_ticket(&dir, "Todo ticket");
+
+    let out = common::tickets(&dir, &["list", "--status", "review"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 1, "expected 1 line, got: {:?}", lines);
+    assert!(
+        lines[0].contains("Review ticket"),
+        "expected review ticket: {}",
+        lines[0]
+    );
+}
+
+#[test]
 fn list_filter_status_or_semantics() {
     let dir = common::test_dir("list_filter_status_or_semantics");
     common::tickets(&dir, &["init"]);
@@ -183,6 +204,75 @@ fn list_shows_multiple_tickets() {
     assert!(titles.iter().any(|l| l.contains("Fix login bug")));
     assert!(titles.iter().any(|l| l.contains("Add OAuth support")));
     assert!(titles.iter().any(|l| l.contains("Write docs")));
+}
+
+#[test]
+fn list_unblocked_includes_ticket_with_no_blockers() {
+    let dir = common::test_dir("list_unblocked_includes_ticket_with_no_blockers");
+    common::tickets(&dir, &["init"]);
+    common::create_ticket(&dir, "Free-standing ticket");
+
+    let out = common::tickets(&dir, &["list", "--unblocked"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 1, "expected 1 line, got: {:?}", lines);
+    assert!(lines[0].contains("Free-standing ticket"));
+}
+
+#[test]
+fn list_unblocked_excludes_ticket_blocked_by_todo() {
+    let dir = common::test_dir("list_unblocked_excludes_ticket_blocked_by_todo");
+    common::tickets(&dir, &["init"]);
+    let (blocker_id, _) = common::create_ticket(&dir, "Blocker still todo");
+    common::tickets(&dir, &["edit", &blocker_id, "--status", "todo"]);
+    common::tickets(
+        &dir,
+        &[
+            "new",
+            "--title",
+            "Blocked ticket",
+            "--blocked-by",
+            &blocker_id,
+        ],
+    );
+
+    let out = common::tickets(&dir, &["list", "--unblocked"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 1, "expected 1 line, got: {:?}", lines);
+    assert!(lines[0].contains("Blocker still todo"));
+    assert!(!stdout.contains("Blocked ticket"));
+}
+
+#[test]
+fn list_unblocked_includes_ticket_whose_only_blocker_is_done() {
+    let dir = common::test_dir("list_unblocked_includes_ticket_whose_only_blocker_is_done");
+    common::tickets(&dir, &["init"]);
+    let (blocker_id, _) = common::create_ticket(&dir, "Blocker now done");
+    common::tickets(&dir, &["edit", &blocker_id, "--status", "done"]);
+    common::tickets(
+        &dir,
+        &[
+            "new",
+            "--title",
+            "Unblocked ticket",
+            "--blocked-by",
+            &blocker_id,
+        ],
+    );
+
+    let out = common::tickets(&dir, &["list", "--unblocked"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "expected 2 lines, got: {:?}", lines);
+    assert!(stdout.contains("Blocker now done"));
+    assert!(stdout.contains("Unblocked ticket"));
 }
 
 #[test]

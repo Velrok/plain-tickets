@@ -30,6 +30,7 @@ pub enum TicketStatus {
     Draft,
     Todo,
     InProgress,
+    Review,
     Done,
     Rejected,
 }
@@ -40,6 +41,7 @@ impl std::fmt::Display for TicketStatus {
             TicketStatus::Draft => "draft",
             TicketStatus::Todo => "todo",
             TicketStatus::InProgress => "in-progress",
+            TicketStatus::Review => "review",
             TicketStatus::Done => "done",
             TicketStatus::Rejected => "rejected",
         };
@@ -328,6 +330,14 @@ mod tests {
     fn tag_special_chars_are_err() {
         assert!("foo!".parse::<Tag>().is_err());
         assert!("foo.bar".parse::<Tag>().is_err());
+    }
+
+    // ── TicketStatus::review ──────────────────────────────────────────────────
+
+    #[test]
+    fn status_review_round_trips_through_value_enum_and_display() {
+        let s = <TicketStatus as clap::ValueEnum>::from_str("review", false).unwrap();
+        assert_eq!(s.to_string(), "review");
     }
 }
 

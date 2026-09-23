@@ -57,6 +57,23 @@ fn new_with_type_tags_status() {
 }
 
 #[test]
+fn new_with_status_review() {
+    let dir = common::test_dir("new_with_status_review");
+    common::tickets(&dir, &["init"]);
+
+    let out = common::tickets(
+        &dir,
+        &["new", "--title", "Needs checking", "--status", "review"],
+    );
+    assert!(out.status.success(), "new failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let filename = stdout.trim().split_once(' ').unwrap().1;
+    let content = fs::read_to_string(dir.join("all").join(filename)).unwrap();
+    assert!(content.contains("status: review"));
+}
+
+#[test]
 fn new_filename_slug_matches_title() {
     let dir = common::test_dir("new_filename_slug_matches_title");
     common::tickets(&dir, &["init"]);

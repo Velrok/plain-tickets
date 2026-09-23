@@ -1,0 +1,24 @@
+---
+source: src/tui/render.rs
+expression: output
+---
+draft               todo                in-progress         review              done
+┌📋 aaa111──────────┐┌📋 bbb222──────────┐┌📋 ccc333──────────┐┌📋 ddd444──────────┐┌📋 eee555──────────┐
+│Draft idea        ││Fix login bug     ││Add search        ││Check payments    ││Ship release      │
+└──────────────────┘└──────────────────┘└──────────────────┘└──────────────────┘└──────────────────┘
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+h/l columns  j/k tickets  H/L move  y copy id  Enter detail  e edit  n new  ? help  q quit

@@ -6,6 +6,7 @@ kanban_columns = [
     "draft",
     "todo",
     "in-progress",
+    "review",
     "done",
 ]
 

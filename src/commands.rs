@@ -241,6 +241,15 @@ fn matches_filters(
 
 pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
     let all_dir = dir.all();
+    let unblocked_ctx = args
+        .unblocked
+        .then(|| -> Result<_> {
+            let active = deps_graph::load_active(&dir)?;
+            let archived = deps_graph::load_archived(&dir)?;
+            Ok((active, archived))
+        })
+        .transpose()?;
+
     let mut tickets: Vec<Ticket> = std::fs::read_dir(&all_dir)
         .with_context(|| format!("could not read directory {}", all_dir.display()))?
         .flatten()
@@ -248,15 +257,21 @@ pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
         .filter_map(|e| std::fs::read_to_string(e.path()).ok())
         .filter_map(|raw| raw.parse::<Ticket>().ok())
         .filter(|t| matches_filters(t, &args.status, &args.r#type, &args.tag))
+        .filter(|t| {
+            unblocked_ctx
+                .as_ref()
+                .is_none_or(|(active, archived)| deps_graph::is_unblocked(active, archived, t))
+        })
         .collect();
 
     tickets.sort_by(|a, b| {
         let status_order = |s: &TicketStatus| match s {
             TicketStatus::InProgress => 0,
-            TicketStatus::Todo => 1,
-            TicketStatus::Draft => 2,
-            TicketStatus::Done => 3,
-            TicketStatus::Rejected => 4,
+            TicketStatus::Review => 1,
+            TicketStatus::Todo => 2,
+            TicketStatus::Draft => 3,
+            TicketStatus::Done => 4,
+            TicketStatus::Rejected => 5,
         };
         status_order(&a.front_matter.status)
             .cmp(&status_order(&b.front_matter.status))
