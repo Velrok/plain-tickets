@@ -10,7 +10,7 @@ parent: null
 blocked_by:
 - chphvf
 created_at: 2026-09-23T11:12:47.313368Z
-updated_at: 2026-09-23T11:12:47.313368Z
+updated_at: 2026-09-23T11:18:23.167589Z
 ---
 
 ## Behaviour
@@ -18,18 +18,20 @@ updated_at: 2026-09-23T11:12:47.313368Z
 `tickets list` colours the status column so the state of the board reads at a
 glance.
 
-| Status | Colour |
-|--------|--------|
-| `done` | green |
-| `rejected` | grey |
-| `in-progress` | yellow |
-| `review` | purple |
-| `draft` | default, uncoloured |
-| `todo` | default, uncoloured |
+| Status        | Colour              |
+| ------------- | ------------------- |
+| `done`        | green               |
+| `rejected`    | grey                |
+| `in-progress` | yellow              |
+| `review`      | purple              |
+| `draft`       | default, uncoloured |
+| `todo`        | default, uncoloured |
 
-`draft` and `todo` were not specified. Leaving them uncoloured is the
-proposal - they are the resting states and colouring everything would defeat
-the purpose - but confirm before building.
+`draft` and `todo` stay uncoloured. Confirmed on 2026-09-23. They are the
+resting states, and colouring every row would defeat the purpose - the point
+is that the four coloured statuses stand out against a plain background.
+
+This is settled, not a proposal. Do not add colours for them.
 
 Only the status cell is coloured. Id, type and title stay plain.
 
