@@ -20,6 +20,7 @@ ratatui = "0.29"
 crossterm = "0.28"
 notify = "6"
 arboard = "3"
+unicode-width = "0.2"
 
 [dev-dependencies]
 toml = "0.8"

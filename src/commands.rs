@@ -8,7 +8,9 @@ use crate::application_types::{ArchiveArgs, EditArgs, ListArgs, NewArgs, Working
 use crate::config;
 use crate::config::Config;
 use crate::deps_graph::{self, DepsGraph};
-use crate::domain_types::{FrontMatter, Tag, Ticket, TicketId, TicketStatus, TicketType};
+use crate::domain_types::{
+    FrontMatter, Tag, Ticket, TicketId, TicketStatus, TicketType, Title, display_width,
+};
 use crate::git;
 use crate::graph::{DepGraph, render_forest, render_tree};
 
@@ -278,39 +280,61 @@ pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
             .then(a.front_matter.created_at.cmp(&b.front_matter.created_at))
     });
 
-    let id_w = tickets
+    // Columns are keyed off display width (terminal columns), not byte or
+    // `char` length — the type column carries an emoji alongside the word,
+    // and a double-width glyph like `🐛` is 4 bytes, 1 `char`, but 2
+    // columns. Rust's built-in `{:<width$}` string padding pads by `char`
+    // count, which is *also* wrong here, so columns are padded by hand via
+    // `pad_to_display_width` below rather than relying on it.
+    let rows: Vec<(String, String, String, &Title)> = tickets
         .iter()
-        .map(|t| t.front_matter.id.to_string().len())
+        .map(|t| {
+            let fm = &t.front_matter;
+            (
+                fm.id.to_string(),
+                fm.status.to_string(),
+                format!("{} {}", fm.r#type.emoji(), fm.r#type),
+                &fm.title,
+            )
+        })
+        .collect();
+
+    let id_w = rows
+        .iter()
+        .map(|(id, ..)| display_width(id))
         .max()
         .unwrap_or(6)
         .max(6);
-    let status_w = tickets
+    let status_w = rows
         .iter()
-        .map(|t| t.front_matter.status.to_string().len())
+        .map(|(_, status, ..)| display_width(status))
         .max()
         .unwrap_or(6)
         .max(6);
-    let type_w = tickets
+    let type_w = rows
         .iter()
-        .map(|t| t.front_matter.r#type.to_string().len())
+        .map(|(_, _, type_col, _)| display_width(type_col))
         .max()
         .unwrap_or(4)
         .max(4);
 
-    for ticket in &tickets {
-        let fm = &ticket.front_matter;
+    for (id, status, type_col, title) in &rows {
         println!(
-            "{:<id_w$}  {:<status_w$}  {:<type_w$}  {}",
-            fm.id,
-            fm.status,
-            fm.r#type,
-            fm.title,
-            id_w = id_w,
-            status_w = status_w,
-            type_w = type_w,
+            "{}  {}  {}  {}",
+            pad_to_display_width(id, id_w),
+            pad_to_display_width(status, status_w),
+            pad_to_display_width(type_col, type_w),
+            title,
         );
     }
     Ok(())
+}
+
+/// Right-pad `s` with spaces so it occupies `width` terminal columns,
+/// measured via [`display_width`] rather than byte or `char` length.
+fn pad_to_display_width(s: &str, width: usize) -> String {
+    let padding = width.saturating_sub(display_width(s));
+    format!("{s}{}", " ".repeat(padding))
 }
 
 pub fn cmd_edit(dir: WorkingDir, cfg: &Config, args: EditArgs) -> Result<()> {

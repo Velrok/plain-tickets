@@ -1,5 +1,15 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use unicode_width::UnicodeWidthStr;
+
+/// Terminal display width of `s`, in columns — not bytes (`str::len`) and not
+/// `char` count (`str::chars().count()`). A multi-byte, double-width glyph
+/// such as an emoji is one `char` but occupies two terminal columns; ASCII is
+/// one column per `char`. Column-alignment logic must measure this, not the
+/// byte or `char` length, or output ragged when non-ASCII glyphs are present.
+pub fn display_width(s: &str) -> usize {
+    s.width()
+}
 
 #[derive(clap::ValueEnum, Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -20,6 +30,20 @@ impl std::fmt::Display for TicketType {
             TicketType::Bug => "bug",
         };
         f.write_str(s)
+    }
+}
+
+impl TicketType {
+    /// Emoji representing this type, for display alongside (never instead
+    /// of) the type word. Defined once here so `list`, `deps-graph`, `show`
+    /// and the TUI can all adopt the same mapping.
+    pub fn emoji(&self) -> &'static str {
+        match self {
+            TicketType::Epic => "🎯",
+            TicketType::Story => "📖",
+            TicketType::Task => "🔧",
+            TicketType::Bug => "🐛",
+        }
     }
 }
 
@@ -167,6 +191,36 @@ impl std::fmt::Display for Tag {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── display_width ────────────────────────────────────────────────────────
+
+    #[test]
+    fn display_width_ascii_char_is_one() {
+        assert_eq!(display_width("a"), 1);
+    }
+
+    #[test]
+    fn display_width_emoji_is_two() {
+        assert_eq!(display_width("🐛"), 2);
+    }
+
+    // ── TicketType::emoji ────────────────────────────────────────────────────
+
+    #[test]
+    fn ticket_type_emoji_is_distinct_per_type() {
+        let emojis = [
+            TicketType::Epic.emoji(),
+            TicketType::Story.emoji(),
+            TicketType::Task.emoji(),
+            TicketType::Bug.emoji(),
+        ];
+        let unique: std::collections::HashSet<_> = emojis.iter().collect();
+        assert_eq!(
+            unique.len(),
+            emojis.len(),
+            "expected distinct emoji per type"
+        );
+    }
 
     // ── Title::from_str ───────────────────────────────────────────────────────
 
