@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use crate::application_types::{ArchiveArgs, EditArgs, ListArgs, NewArgs, WorkingDir};
 use crate::config;
 use crate::config::Config;
+use crate::deps_graph::{self, DepsGraph};
 use crate::domain_types::{FrontMatter, Tag, Ticket, TicketId, TicketStatus, TicketType};
 use crate::git;
 use crate::graph::{DepGraph, render_forest, render_tree};
@@ -76,6 +77,13 @@ pub fn cmd_graph(dir: WorkingDir, id: Option<TicketId>) -> Result<()> {
             ids.join(", ")
         );
     }
+    Ok(())
+}
+
+/// Renders the full dependency forest: no arguments, always the whole tree.
+pub fn cmd_deps_graph(dir: WorkingDir) -> Result<()> {
+    let graph = DepsGraph::build(&dir)?;
+    print!("{}", deps_graph::render_forest(&graph));
     Ok(())
 }
 

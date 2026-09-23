@@ -6,6 +6,7 @@ use clap::{Parser, Subcommand};
 mod application_types;
 mod commands;
 mod config;
+mod deps_graph;
 mod domain_types;
 mod git;
 mod graph;
@@ -13,7 +14,8 @@ mod tui;
 
 use application_types::{ArchiveArgs, EditArgs, ListArgs, NewArgs, WorkingDir};
 use commands::{
-    cmd_archive, cmd_edit, cmd_graph, cmd_init, cmd_list, cmd_new, cmd_show, resolve_dir,
+    cmd_archive, cmd_deps_graph, cmd_edit, cmd_graph, cmd_init, cmd_list, cmd_new, cmd_show,
+    resolve_dir,
 };
 use domain_types::TicketId;
 
@@ -34,6 +36,8 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Archive(ArchiveArgs),
+    /// Show the full dependency forest, indented under each blocker's blockees.
+    DepsGraph,
     /// Show dependency graph. No ID = full forest; with ID = tree rooted at that ticket.
     Graph {
         id: Option<TicketId>,
@@ -75,6 +79,7 @@ fn run() -> Result<()> {
             match cmd {
                 Commands::Init { .. } => unreachable!(),
                 Commands::Archive(args) => cmd_archive(working_dir, &cfg, args),
+                Commands::DepsGraph => cmd_deps_graph(working_dir),
                 Commands::Graph { id } => cmd_graph(working_dir, id),
                 Commands::List(args) => cmd_list(working_dir, &cfg, args),
                 Commands::Edit(args) => cmd_edit(working_dir, &cfg, args),
