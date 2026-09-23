@@ -254,12 +254,19 @@ pub fn update(app: &mut App, msg: Message) -> Cmd {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
+    use chrono::{TimeZone, Utc};
 
     use crate::domain_types::{FrontMatter, TicketId, TicketStatus, TicketType, Title};
 
+    /// Fixed, obviously-fictional timestamp for test fixtures, so rendered
+    /// output never depends on the wall clock. Constructed deterministically
+    /// rather than parsed, so it can never fail at runtime.
+    fn fixed_timestamp() -> chrono::DateTime<Utc> {
+        Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap()
+    }
+
     fn make_ticket(id: &str, title: &str, status: TicketStatus) -> Ticket {
-        let now = Utc::now();
+        let now = fixed_timestamp();
         Ticket {
             front_matter: FrontMatter {
                 id: TicketId::from(id.to_string()),

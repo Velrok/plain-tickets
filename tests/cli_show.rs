@@ -1,5 +1,28 @@
 mod common;
 
+/// True if `s` contains a `YYYY-MM-DD`-shaped substring, without pinning the
+/// assertion to any particular year, so it doesn't rot as the calendar moves
+/// on. Still fails if no date is rendered at all.
+fn contains_date_shape(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.len() < 10 {
+        return false;
+    }
+    (0..=bytes.len() - 10).any(|i| {
+        let w = &bytes[i..i + 10];
+        w[0].is_ascii_digit()
+            && w[1].is_ascii_digit()
+            && w[2].is_ascii_digit()
+            && w[3].is_ascii_digit()
+            && w[4] == b'-'
+            && w[5].is_ascii_digit()
+            && w[6].is_ascii_digit()
+            && w[7] == b'-'
+            && w[8].is_ascii_digit()
+            && w[9].is_ascii_digit()
+    })
+}
+
 #[test]
 fn show_errors_when_not_initialised() {
     let dir = common::test_dir("show_errors_when_not_initialised");
@@ -137,8 +160,9 @@ fn show_timestamps_include_date_and_relative() {
     let out = common::tickets(&dir, &["show", &id]);
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    // Date format YYYY-MM-DD
-    assert!(stdout.contains("2026-"), "expected date in output");
+    // Date format YYYY-MM-DD — shape only, not a hardcoded year, so this
+    // doesn't rot on 2027-01-01.
+    assert!(contains_date_shape(&stdout), "expected date in output");
     // Relative time separator
     assert!(stdout.contains(" · "), "expected · separator");
     // Relative time (just created)
