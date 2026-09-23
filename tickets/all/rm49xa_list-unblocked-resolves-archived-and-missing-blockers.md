@@ -2,7 +2,7 @@
 id: rm49xa
 title: list --unblocked resolves archived and missing blockers
 type: task
-status: draft
+status: todo
 tags:
 - deps-graph
 parent: fyihf8
@@ -12,7 +12,7 @@ blocked_by:
 - xptucc
 - t9p76e
 created_at: 2026-09-23T10:14:02.474485Z
-updated_at: 2026-09-23T10:14:02.474485Z
+updated_at: 2026-09-23T10:28:42.767578Z
 ---
 
 ## Behaviour
