@@ -2,13 +2,13 @@
 id: 8wb1lh
 title: cargo test is permanently red from a date dependent tui snapshot
 type: bug
-status: in-progress
+status: done
 tags:
 - test-health
 parent: null
 blocked_by: []
 created_at: 2026-09-23T10:30:40.691786Z
-updated_at: 2026-09-23T10:31:14.073390Z
+updated_at: 2026-09-23T10:33:19.193156Z
 ---
 
 ## Problem
@@ -16,10 +16,12 @@ updated_at: 2026-09-23T10:31:14.073390Z
 `cargo test` does not pass on a clean checkout of main. The unit test
 `tui::render::tests::detail_view_renders_ticket_fields` fails with
 
-    -  |Created: 2026-07-30 |
-    -  |Updated: 2026-07-30 |
-    +  |Created: 2026-09-23 |
-    +  |Updated: 2026-09-23 |
+```
+-  |Created: 2026-07-30 |
+-  |Updated: 2026-07-30 |
++  |Created: 2026-09-23 |
++  |Updated: 2026-09-23 |
+```
 
 Confirmed on 2026-09-23 by building at the commit before the deps-graph work
 landed, so it is not caused by any recent change. It has been failing every
@@ -30,10 +32,12 @@ day since 2026-07-30, the day the snapshot was recorded.
 The test helpers in `src/tui/render.rs` build their fixture with the wall
 clock:
 
-    fn make_ticket(...) -> Ticket {
-        let now = Utc::now();
-        ...
-    }
+```
+fn make_ticket(...) -> Ticket {
+    let now = Utc::now();
+    ...
+}
+```
 
 `make_ticket_with_tags` does the same. The detail view renders `Created:` and
 `Updated:`, so its snapshot captures whatever date the test happened to run
@@ -93,3 +97,41 @@ suite itself rather than to new product code.
 - Demonstrate date independence rather than asserting it. Running the suite
   under a faked future date, or a brief note showing the fixture no longer
   reads the clock, both count - say which you did.
+
+## Implementation notes
+
+- Captured RED first: `cargo test` on a clean checkout failed exactly as
+  described, `-Created: 2026-07-30` / `-Updated: 2026-07-30` vs
+  `+Created: 2026-09-23` / `+Updated: 2026-09-23` (today's date), 100 passed,
+  1 failed.
+- Fix: added `fn fixed_timestamp() -> chrono::DateTime<Utc>` in the
+  `#[cfg(test)] mod tests` block of `src/tui/render.rs`, built with
+  `Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap()` (deterministic
+  construction, not a runtime string parse). Both `make_ticket` and
+  `make_ticket_with_tags` now call it instead of `Utc::now()`.
+- Re-recorded
+  `tickets__tui__render__tests__detail_view_renders_ticket_fields.snap`; it
+  now shows `Created: 2000-01-01` / `Updated: 2000-01-01` - committed, and it
+  will render the same on any date.
+- Date independence evidence: chose the static-analysis route rather than
+  installing `libfaketime` (not present on the box, and pulling in new
+  tooling felt like more than this fix warranted). `rg -n "Utc::now|fixed_timestamp" src/tui/render.rs` shows `Utc::now()` no longer
+  appears anywhere in the test module - both helpers now resolve to the
+  `fixed_timestamp()` literal only, so there is nothing left in the fixture
+  path that can read the wall clock.
+- Audited every other `Utc::now()` call site:
+  - `src/commands.rs:98,150,365`, `src/tui/mod.rs:221`, `src/tui/app.rs:119,262`
+    - left untouched as instructed; all are legitimate production writes/reads
+      of the real current time.
+  - `src/graph.rs:233-234` (`make_ticket` fixture in `graph::tests`) - left
+    untouched. Checked what it feeds: `render_tree`/`render_subtree`
+    (`src/graph.rs:110-136`) only emit `id`, `status`, and `title` per line
+    (e.g. `"abc123  todo  Test ticket\n"`); `created_at`/`updated_at` are
+    never part of the rendered string, and none of the `graph.rs` assertions
+    reference a date. So this call site doesn't feed any assertion or
+    snapshot and is not part of the same bug class - reported per the
+    ticket's instruction, not changed.
+- Final verification: `cargo test` - 101+10+7+3+2+4+8+7+5+10+8+5+7+7+2 tests,
+  0 failed, 0 ignored. `cargo clippy --all-targets -- -D warnings` - clean.
+  `cargo fmt --check` - clean. `git status --porcelain` after the full test
+  run showed only the two intended source changes, no stray `.snap.new`.
