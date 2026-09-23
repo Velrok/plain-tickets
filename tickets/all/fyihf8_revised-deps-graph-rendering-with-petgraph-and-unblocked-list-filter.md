@@ -2,13 +2,13 @@
 id: fyihf8
 title: Revised deps-graph rendering with petgraph and unblocked list filter
 type: epic
-status: draft
+status: in-progress
 tags:
 - deps-graph
 parent: null
 blocked_by: []
 created_at: 2026-09-23T10:09:58.851993Z
-updated_at: 2026-09-23T10:09:58.851993Z
+updated_at: 2026-09-23T10:28:42.904755Z
 ---
 
 ## Goal
