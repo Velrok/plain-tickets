@@ -2,13 +2,13 @@
 id: zgfki6
 title: TUI help overlay clips its own quit and dismiss keybindings
 type: bug
-status: todo
+status: in-progress
 tags:
 - tui
 parent: null
 blocked_by: []
 created_at: 2026-09-23T11:12:44.798707Z
-updated_at: 2026-09-23T11:12:44.798707Z
+updated_at: 2026-09-23T11:13:20.127102Z
 ---
 
 ## Problem
