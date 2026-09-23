@@ -2,14 +2,14 @@
 id: 3yew0k
 title: deps-graph repeats a multi-blocker ticket under each blocker
 type: task
-status: draft
+status: todo
 tags:
 - deps-graph
 parent: fyihf8
 blocked_by:
 - ihqh45
 created_at: 2026-09-23T10:13:43.510347Z
-updated_at: 2026-09-23T10:13:43.510347Z
+updated_at: 2026-09-23T10:28:42.061745Z
 ---
 
 ## Behaviour
