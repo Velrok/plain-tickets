@@ -155,11 +155,37 @@ fn draw_detail(f: &mut Frame, app: &App) {
         fm.updated_at.format("%Y-%m-%d")
     )));
 
+    let header_len = lines.len();
+
+    let mut body_lines: Vec<Line> = Vec::new();
     if !ticket.body.is_empty() {
-        lines.push(Line::from(""));
+        body_lines.push(Line::from(""));
         for line in ticket.body.lines() {
-            lines.push(Line::from(line.to_string()));
+            body_lines.push(Line::from(line.to_string()));
         }
+    }
+
+    // The body is user-authored and unbounded, so it can outgrow the box.
+    // Never drop the overflow silently - truncate with an explicit marker
+    // naming how much is hidden and how to see the rest. Real scrolling
+    // was considered (see `4x7e81` implementation notes) and declined: it
+    // needs new `App` state and keybindings, which is out of scope for a
+    // render-only fix, and `e` already opens the ticket in an editor.
+    let inner_height = area.height.saturating_sub(2) as usize; // top/bottom border
+    if header_len + body_lines.len() > inner_height {
+        let available_for_body = inner_height.saturating_sub(header_len).saturating_sub(1); // reserve one row for the marker itself
+        let shown = available_for_body.min(body_lines.len());
+        let hidden = body_lines.len() - shown;
+        lines.extend(body_lines.into_iter().take(shown));
+        lines.push(Line::styled(
+            format!(
+                "… {hidden} more line{} — press e to open",
+                if hidden == 1 { "" } else { "s" }
+            ),
+            Style::default().fg(Color::DarkGray),
+        ));
+    } else {
+        lines.extend(body_lines);
     }
 
     let block = Block::default()
@@ -711,6 +737,143 @@ mod tests {
         app.screen = Screen::Detail;
         let output = render_to_string(&app, 80, 24);
         insta::assert_snapshot!(output);
+    }
+
+    fn make_ticket_with_body(id: &str, title: &str, status: TicketStatus, body: &str) -> Ticket {
+        let now = fixed_timestamp();
+        Ticket {
+            front_matter: FrontMatter {
+                id: TicketId::from(id.to_string()),
+                title: title.parse::<Title>().unwrap(),
+                r#type: TicketType::Task,
+                status,
+                tags: vec![],
+                parent: None,
+                blocked_by: vec![],
+                created_at: now,
+                updated_at: now,
+            },
+            body: body.to_string(),
+        }
+    }
+
+    /// A long body (40 lines) at 80x24 must never be silently cut - the
+    /// overflow must be named with a truncation marker rather than dropped.
+    #[test]
+    fn detail_view_long_body_is_not_silently_truncated() {
+        let columns = vec![TicketStatus::Todo];
+        let body: String = (1..=40)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let tickets = vec![make_ticket_with_body(
+            "abc123",
+            "Fix login bug",
+            TicketStatus::Todo,
+            &body,
+        )];
+        let mut app = App::new(tickets, columns);
+        app.screen = Screen::Detail;
+        let output = render_to_string(&app, 80, 24);
+        assert!(
+            !output.contains("line 40"),
+            "expected the tail of the body to be cut off in this fixture, got: {output}"
+        );
+        assert!(
+            output.contains("more line") && output.contains("press e to open"),
+            "expected a truncation marker naming the hidden content, got: {output}"
+        );
+    }
+
+    /// The truncation marker must state a concrete, accurate count of hidden
+    /// lines, not just a vague "more content" signal.
+    #[test]
+    fn detail_view_truncation_marker_states_accurate_hidden_count() {
+        let columns = vec![TicketStatus::Todo];
+        let body: String = (1..=40)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let tickets = vec![make_ticket_with_body(
+            "abc123",
+            "Fix login bug",
+            TicketStatus::Todo,
+            &body,
+        )];
+        let mut app = App::new(tickets, columns);
+        app.screen = Screen::Detail;
+        let output = render_to_string(&app, 80, 24);
+
+        // Count how many "line N" body rows actually made it into the output.
+        let shown = (1..=40)
+            .filter(|n| output.contains(&format!("line {n}")))
+            .count();
+        let hidden = 40 - shown;
+        assert!(hidden > 0, "fixture should force truncation: {output}");
+        let expected_marker = format!("{hidden} more line");
+        assert!(
+            output.contains(&expected_marker),
+            "expected marker to report {hidden} hidden lines, got: {output}"
+        );
+    }
+
+    /// Boundary: a body that exactly fills the available height must render
+    /// in full, with no marker and nothing cut.
+    ///
+    /// At 80x24, `centered_rect(80, 80, ...)` yields an area of height 20
+    /// (18 inner rows once borders are subtracted). For a ticket fixture
+    /// with no tags/parent/blocked-by, the header is 6 metadata lines plus
+    /// 1 blank separator = 7, leaving exactly 11 rows for the body.
+    #[test]
+    fn detail_view_body_exactly_filling_height_shows_no_marker() {
+        let columns = vec![TicketStatus::Todo];
+        let body: String = (1..=11)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let tickets = vec![make_ticket_with_body(
+            "abc123",
+            "Fix login bug",
+            TicketStatus::Todo,
+            &body,
+        )];
+        let mut app = App::new(tickets, columns);
+        app.screen = Screen::Detail;
+        let output = render_to_string(&app, 80, 24);
+        for n in 1..=11 {
+            assert!(
+                output.contains(&format!("line {n}")),
+                "line {n} should be fully visible when the body exactly fits: {output}"
+            );
+        }
+        assert!(
+            !output.contains("more line"),
+            "a body that exactly fits should show no truncation marker: {output}"
+        );
+    }
+
+    /// One line over the boundary: the 12th line must not be silently
+    /// dropped - it must be represented by the truncation marker.
+    #[test]
+    fn detail_view_body_one_line_over_height_shows_marker() {
+        let columns = vec![TicketStatus::Todo];
+        let body: String = (1..=12)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let tickets = vec![make_ticket_with_body(
+            "abc123",
+            "Fix login bug",
+            TicketStatus::Todo,
+            &body,
+        )];
+        let mut app = App::new(tickets, columns);
+        app.screen = Screen::Detail;
+        let output = render_to_string(&app, 80, 24);
+        assert!(
+            output.contains("more line") && output.contains("press e to open"),
+            "one line over capacity should trigger the truncation marker: {output}"
+        );
     }
 
     // ── filter ─────────────────────────────────────────────────────────────
