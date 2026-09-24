@@ -397,6 +397,81 @@ mod tests {
     // ── col_indices / grouping ─────────────────────────────────────────────
 
     #[test]
+    fn col_indices_returns_review_ticket_when_review_is_a_configured_column() {
+        let tickets = vec![make_ticket("a", "In review", TicketStatus::Review)];
+        let columns = vec![
+            TicketStatus::Todo,
+            TicketStatus::InProgress,
+            TicketStatus::Review,
+            TicketStatus::Done,
+        ];
+        let app = App::new(tickets, columns);
+        let review_col = 2;
+        let indices = app.col_indices(review_col);
+        assert_eq!(indices.len(), 1);
+        assert_eq!(app.tickets[indices[0]].front_matter.id.to_string(), "a");
+    }
+
+    /// Structural regression test for 7zl07z: build a board whose configured
+    /// columns are *every* `TicketStatus` variant (via `clap::ValueEnum`, not
+    /// a hand-maintained list), put exactly one ticket in each status, and
+    /// assert every ticket surfaces in exactly one column. This cannot rot
+    /// when a new status is added - the new variant is picked up
+    /// automatically and, if it were ever mis-wired, would show up here as a
+    /// missing or duplicated ticket rather than needing its own new test.
+    #[test]
+    fn every_configured_status_is_reachable_in_exactly_one_column() {
+        use clap::ValueEnum;
+
+        let all_statuses = TicketStatus::value_variants().to_vec();
+        let tickets: Vec<Ticket> = all_statuses
+            .iter()
+            .enumerate()
+            .map(|(i, status)| {
+                make_ticket(&format!("t{i}"), &format!("Ticket {i}"), status.clone())
+            })
+            .collect();
+        let expected_ids: Vec<String> = tickets
+            .iter()
+            .map(|t| t.front_matter.id.to_string())
+            .collect();
+
+        let app = App::new(tickets, all_statuses.clone());
+
+        for (expected_col, id) in expected_ids.iter().enumerate() {
+            // The ticket must appear in exactly its own column...
+            let own_col_ids: Vec<String> = app
+                .col_indices(expected_col)
+                .iter()
+                .map(|&i| app.tickets[i].front_matter.id.to_string())
+                .collect();
+            assert!(
+                own_col_ids.contains(id),
+                "ticket {id} (status {:?}) missing from its configured column",
+                all_statuses[expected_col]
+            );
+
+            // ...and in no other column.
+            for other_col in 0..all_statuses.len() {
+                if other_col == expected_col {
+                    continue;
+                }
+                let other_col_ids: Vec<String> = app
+                    .col_indices(other_col)
+                    .iter()
+                    .map(|&i| app.tickets[i].front_matter.id.to_string())
+                    .collect();
+                assert!(
+                    !other_col_ids.contains(id),
+                    "ticket {id} (status {:?}) leaked into column {:?}",
+                    all_statuses[expected_col],
+                    all_statuses[other_col]
+                );
+            }
+        }
+    }
+
+    #[test]
     fn tickets_grouped_into_correct_columns() {
         let tickets = vec![
             make_ticket("a", "Fix bug", TicketStatus::Todo),
