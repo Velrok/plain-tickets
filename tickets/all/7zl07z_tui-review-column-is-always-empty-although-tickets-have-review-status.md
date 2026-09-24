@@ -8,7 +8,7 @@ tags:
 parent: null
 blocked_by: []
 created_at: 2026-09-23T11:25:38.715322Z
-updated_at: 2026-09-24T16:20:57.808005Z
+updated_at: 2026-09-24T16:21:40.382393Z
 ---
 
 ## Symptom
@@ -76,3 +76,74 @@ query. Either is a plausible starting point, but neither has been confirmed.
   column, with none missing
 - the "every status is reachable" test is the one worth keeping - it would
   have caught this, and will catch the next status added
+
+## Implementation notes
+
+**Both named leads were eliminated with evidence, not just read-throughs.**
+
+- `App::col_indices` (`src/tui/app.rs`) - built a `Review`-status ticket and
+  a `[Todo, InProgress, Review, Done]` column set directly in a unit test
+  (`col_indices_returns_review_ticket_when_review_is_a_configured_column`).
+  It found the ticket correctly. Eliminated.
+- `load_tickets`'s `.filter_map(|raw| raw.parse::<Ticket>().ok())`
+  (`src/tui/mod.rs`) - parsed the real on-disk `review`-status ticket file
+  `pgej72_*.md` directly through `Ticket::from_str` in a throwaway
+  diagnostic test. It parsed successfully with `status == Review`.
+  Eliminated.
+- Went further and drove the **real compiled binary** interactively via
+  `tmux` against this repo's own `tickets/` directory
+  (`./target/debug/tickets`, i.e. the `cargo build` output, not the stale
+  `tickets` on `PATH`). The `review` column rendered correctly with exactly
+  the 6 tickets `tickets list --status review` reports
+  (`3p7tpt 0awkzp 7se1mu pgej72 chphvf zgfki6`). **The bug does not
+  reproduce on current `main` at all** - `col_indices`, `load_tickets` and
+  the config-driven `kanban_columns` are all correct as committed.
+
+**Actual root cause: the bug report was filed against the stale globally
+installed `tickets` binary on `PATH`, not `cargo run --`.** Proved this
+directly: ran the exact same `tickets/` directory through the stale
+`~/.cargo/bin/tickets` (a Mach-O binary built 7 May, long before the
+`review` status existed, per its file mtime) via the same `tmux` harness.
+Result: the `review` column header rendered correctly between
+`in-progress` and `done` (its config-driven label is just a string), but
+the column was completely empty - the exact reported symptom - while
+several `todo` tickets were also silently missing from their column. The
+stale binary's compiled `TicketStatus` enum predates `Review`, so
+`Ticket::from_str` fails to deserialize `status: review` (and evidently
+some other now-valid front matter) into it, and `load_tickets`'s
+`.filter_map(...).ok())` silently drops every such ticket. This is exactly
+the environment trap already documented in `docs/contributor-orientation.md`
+and the ticket-writing instructions ("`tickets` on `PATH` is STALE").
+
+**No code defect exists in the current codebase for this ticket to fix.**
+The two required tests were added anyway, as permanent regression coverage
+(not diagnostics - the throwaway parse-fixture and tmux-driven checks above
+were removed after use):
+
+- `col_indices_returns_review_ticket_when_review_is_a_configured_column`
+  (`src/tui/app.rs`) - the specific case from the ticket.
+- `every_configured_status_is_reachable_in_exactly_one_column`
+  (`src/tui/app.rs`) - builds a board whose columns are **every**
+  `TicketStatus` variant via `clap::ValueEnum::value_variants()` (not a
+  hand-maintained list), puts one ticket per status, and asserts each
+  ticket appears in exactly one column, never zero, never more than one.
+  This is the discriminating test: verified it by temporarily short-
+  circuiting `col_indices` to return `vec![]` for `Review` and confirming
+  it fails with a precise "missing from its configured column" message,
+  then reverted. Because it enumerates variants structurally rather than
+  naming them, it will automatically pick up the next status added and
+  needs no maintenance when that happens.
+
+**Silent-drop follow-up: deliberately not fixed here, flagged as a
+follow-up ticket.** `load_tickets`'s `.filter_map(|raw| raw.parse::<Ticket>().ok())`
+genuinely can make tickets vanish from the board with zero user-visible
+indication - the stale-binary investigation above demonstrates the exact
+mechanism (any front matter the running binary's `TicketStatus`/`FrontMatter`
+can't deserialize is dropped silently). It is not the cause of *this*
+ticket's reported bug on current `main` (nothing on `main` fails to parse),
+so fixing it here would be scope creep on a ticket about a specific
+symptom. But the hazard is real and worth its own ticket: surface a flash
+message or footer warning (`App.flash` already exists as the mechanism) when
+`load_tickets` (or its initial-load / file-watch-reload call sites in
+`src/tui/mod.rs`) drops a file that failed to parse, so a user is not left
+wondering why a ticket silently disappeared from the board.
