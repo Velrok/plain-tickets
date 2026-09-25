@@ -87,3 +87,49 @@ fn blocker_archived_and_done_never_appears_as_a_node_or_label() {
         "archived done blocker title must not appear anywhere: {stdout}"
     );
 }
+
+// --- xptucc: archived non-done blocker stub ---
+
+#[test]
+fn archived_non_done_blocker_keeps_dependent_blocked_and_renders_stub_root() {
+    let dir = common::test_dir(
+        "deps_graph_archived_non_done_blocker_keeps_dependent_blocked_and_renders_stub_root",
+    );
+    common::tickets(&dir, &["init"]);
+    let blocker = create_todo_ticket(&dir, "Old rejected setup");
+    common::tickets(&dir, &["edit", &blocker, "--status", "rejected"]);
+    let out = common::tickets(&dir, &["archive", &blocker]);
+    assert!(out.status.success(), "archive failed: {:?}", out);
+    let dependent = create_todo_ticket(&dir, "Migrate to new queue");
+    common::tickets(&dir, &["edit", &dependent, "--blocked-by", &blocker]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let expected =
+        format!("[archived: {blocker} rejected]\n└── {dependent}  todo  Migrate to new queue\n");
+    assert_eq!(stdout, expected);
+}
+
+#[test]
+fn archived_stub_names_both_the_archived_ticket_id_and_its_status() {
+    let dir = common::test_dir(
+        "deps_graph_archived_stub_names_both_the_archived_ticket_id_and_its_status",
+    );
+    common::tickets(&dir, &["init"]);
+    let blocker = create_todo_ticket(&dir, "Abandoned approach");
+    common::tickets(&dir, &["edit", &blocker, "--status", "rejected"]);
+    common::tickets(&dir, &["archive", &blocker]);
+    let dependent = create_todo_ticket(&dir, "Depends on abandoned work");
+    common::tickets(&dir, &["edit", &dependent, "--blocked-by", &blocker]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains(&format!("[archived: {blocker} rejected]")),
+        "stub must name both the archived id and its status: {stdout}"
+    );
+}
