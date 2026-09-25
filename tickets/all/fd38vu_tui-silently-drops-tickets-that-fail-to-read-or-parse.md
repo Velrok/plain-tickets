@@ -2,13 +2,13 @@
 id: fd38vu
 title: TUI silently drops tickets that fail to read or parse
 type: bug
-status: todo
+status: in-progress
 tags:
 - tui
 parent: null
 blocked_by: []
 created_at: 2026-09-25T12:08:10.138081Z
-updated_at: 2026-09-25T12:08:10.138081Z
+updated_at: 2026-09-25T12:08:34.255994Z
 ---
 
 ## Symptom
