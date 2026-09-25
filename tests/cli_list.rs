@@ -851,3 +851,128 @@ fn list_piped_into_head_exits_cleanly_with_large_output() {
         "list should print nothing to stderr on a broken pipe"
     );
 }
+
+// ── load failures (4aawv9) ───────────────────────────────────────────────
+//
+// Mirrors fd38vu's TUI fix on the CLI side: a ticket file that cannot be
+// read or parsed must never vanish from `tickets list` without a trace.
+// Valid tickets still print on stdout; the failure is reported on stderr,
+// stdout stays clean, and the exit code is unchanged.
+
+/// Writes a `.md` file straight into `dir/all/` with front matter that will
+/// not parse as a `Ticket` (no `id` field).
+fn write_unparseable_file(dir: &std::path::Path, filename: &str) {
+    let path = dir.join("all").join(filename);
+    std::fs::write(&path, "---\nstatus: nonsense-status\n---\n").unwrap();
+}
+
+/// `chmod 000` a file already written into `dir/all/` so it can no longer
+/// be read. Returns whether the fixture actually became unreadable — some
+/// environments (notably running as root) ignore mode 000 entirely.
+fn lock_file(dir: &std::path::Path, filename: &str) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    let path = dir.join("all").join(filename);
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+    std::fs::read_to_string(&path).is_err()
+}
+
+fn unlock_file(dir: &std::path::Path, filename: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    let path = dir.join("all").join(filename);
+    let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644));
+}
+
+#[test]
+fn list_reports_unreadable_file_without_dropping_valid_ones() {
+    let dir = common::test_dir("list_reports_unreadable_file_without_dropping_valid_ones");
+    common::tickets(&dir, &["init"]);
+    common::create_ticket(&dir, "Alpha ticket");
+    common::create_ticket(&dir, "Beta ticket");
+    let (_locked_id, locked_filename) = common::create_ticket(&dir, "Locked ticket");
+
+    let became_unreadable = lock_file(&dir, &locked_filename);
+    let out = common::tickets(&dir, &["list"]);
+    unlock_file(&dir, &locked_filename);
+
+    if !became_unreadable {
+        eprintln!(
+            "skipping list_reports_unreadable_file_without_dropping_valid_ones: \
+             chmod 000 did not make the file unreadable (running as root?)"
+        );
+        return;
+    }
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("Alpha ticket") && stdout.contains("Beta ticket"),
+        "valid tickets must still be listed: {stdout}"
+    );
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains(&locked_filename),
+        "stderr must name the unreadable file, got: {stderr}"
+    );
+}
+
+#[test]
+fn list_reports_unparseable_file_without_dropping_valid_ones() {
+    let dir = common::test_dir("list_reports_unparseable_file_without_dropping_valid_ones");
+    common::tickets(&dir, &["init"]);
+    common::create_ticket(&dir, "Alpha ticket");
+    common::create_ticket(&dir, "Beta ticket");
+    write_unparseable_file(&dir, "zz9999_broken.md");
+
+    let out = common::tickets(&dir, &["list"]);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("Alpha ticket") && stdout.contains("Beta ticket"),
+        "valid tickets must still be listed: {stdout}"
+    );
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("zz9999_broken.md"),
+        "stderr must name the unparseable file, got: {stderr}"
+    );
+}
+
+#[test]
+fn list_stdout_stays_clean_when_a_file_fails_to_load() {
+    let dir = common::test_dir("list_stdout_stays_clean_when_a_file_fails_to_load");
+    common::tickets(&dir, &["init"]);
+    common::create_ticket(&dir, "Alpha ticket");
+    write_unparseable_file(&dir, "zz9999_broken.md");
+
+    let out = common::tickets(&dir, &["list"]);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains("could not"),
+        "the load-failure warning must not leak onto stdout: {stdout}"
+    );
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(
+        lines.len(),
+        1,
+        "stdout should contain exactly the one valid row: {:?}",
+        lines
+    );
+    assert!(lines[0].contains("Alpha ticket"), "got: {}", lines[0]);
+}
+
+#[test]
+fn list_exit_code_unchanged_when_a_file_fails_to_load() {
+    let dir = common::test_dir("list_exit_code_unchanged_when_a_file_fails_to_load");
+    common::tickets(&dir, &["init"]);
+    common::create_ticket(&dir, "Alpha ticket");
+    write_unparseable_file(&dir, "zz9999_broken.md");
+
+    let out = common::tickets(&dir, &["list"]);
+    assert!(
+        out.status.success(),
+        "exit code must stay 0 even when a file fails to load: {:?}",
+        out
+    );
+}
