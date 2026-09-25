@@ -56,3 +56,25 @@ checking never fires and the bug is invisible until someone acts on a bad
 recommendation. This test is the only thing standing in the way of it.
 
 Keep the predicate positive, and keep this test.
+
+## Decision - rejected tickets are excluded from --unblocked
+
+Settled by the user on 2026-09-25, resolving the open question flagged at the
+previous handoff.
+
+`--unblocked` means "ready to work on", so a ticket whose OWN status is
+`rejected` never appears, even though it has no unfinished blockers. This is a
+filter on the ticket's own status, distinct from the blocker-resolution rule.
+
+- `rejected` -> excluded from `--unblocked` output.
+- `draft` -> still included. It is a real candidate, just unrefined.
+- Anything finer is the user's job via `--status`, which composes with
+  `--unblocked` as `0awkzp` established.
+
+Keep this separate from `blocker_satisfied`. That predicate answers "does this
+blocker satisfy the dependency" and stays positive (`== Done`). The rejected
+exclusion answers a different question - "is this ticket itself worth
+recommending" - and belongs in `cmd_list`'s filtering, not in the shared seam.
+
+Add a sixth e2e test - a rejected ticket with no blockers is NOT listed by
+`--unblocked`, but IS listed by a plain `list`.
