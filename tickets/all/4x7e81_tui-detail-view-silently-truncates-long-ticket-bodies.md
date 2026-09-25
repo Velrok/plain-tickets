@@ -8,8 +8,9 @@ tags:
 parent: null
 blocked_by: []
 created_at: 2026-09-23T11:21:55.199665Z
-updated_at: 2026-09-25T11:45:13.581676Z
+updated_at: 2026-09-25T12:05:06.830589Z
 ---
+
 
 ## Problem
 
@@ -140,3 +141,72 @@ cherry-pick. Unrelated to the design/implementation above.
 **Verification (post cherry-pick, on current `main`):** `cargo build`,
 `cargo test` (245 passed / 0 failed), `cargo clippy --all-targets` clean,
 `cargo fmt` clean.
+
+## Rework (2026-09-25), commit `5ee8c05` — independently verified
+
+The 2026-09-24 fix **failed independent verification**. It budgeted on
+unwrapped `Line` count, but the detail box is ~62 columns inside its border
+at 80 cols while this repo's ticket bodies wrap at ~75 chars. Most body lines
+therefore cost two rows: kept lines overran the box and pushed the marker
+itself off the bottom — a silent cut on this very ticket at the default
+80x24 — and bodies of a few very long lines never triggered truncation at
+all. The original notes called this "a very long single line could
+under-truncate"; that understated it badly.
+
+**Fix:** budget in *rendered rows* via `Paragraph::line_count`, which needs
+ratatui's `unstable-rendered-line-info` feature (enabled in `Cargo.toml`).
+The marker's own row cost is measured rather than assumed to be one, so it
+can no longer be pushed off-screen. Five tests added, four RED-first, all
+asserting the marker's presence in the rendered `TestBackend` buffer.
+
+**Why not hand-roll the measurement:** `Wrap { trim: false }` breaks on word
+boundaries, so `ceil(display_width / inner_width)` is a *lower* bound.
+Verification demonstrated this empirically rather than by argument: a line of
+25x `日本語テスト` has display width 303, which naive division puts at 5 rows
+at width 62, but it actually renders as 6 — the CJK run is one unsplittable
+word. Hand-rolling would have under-budgeted by a row and walked straight
+back into the original bug.
+
+**Unstable-feature risk, assessed:** removal would be a hard compile error
+(verified experimentally — reverting the feature while keeping the call
+yields `error[E0624]: method 'line_count' is private`). A future ratatui
+could in principle change `line_count`'s semantics while keeping its
+signature, which would be silent; the mitigation is that all five new tests
+assert against the rendered buffer, so such a change surfaces on upgrade.
+`ratatui = "0.29"` pins to 0.29.x, so no drive-by upgrade.
+
+The singular `"1 more line"` branch was dead under the old line-count budget
+(minimum hidden was always 2). Under row budgeting it is genuinely reachable
+— a body ending in a line that wraps onto two rows — and is pinned by a test.
+
+**Verification evidence** (real binary under tmux, counts hand-checked):
+Repro A, this ticket's own body at 80x24, now shows
+`… 123 more lines — press e to open` on the last row inside the border
+(129 body lines − 6 shown = 123; header 7 + body 10 + marker 1 = 18 =
+inner height). Repro B fixed. Also probed and correct: CJK and emoji bodies
+(borders intact), mixed wrapped/unwrapped, a single line wrapping 10 rows,
+long titles whose headers wrap and correctly shrink the body budget, exact
+boundary and boundary+1, and narrow terminals down to 28 cols where the
+marker wraps to two rows and stays inside the border. No panic at any size
+down to 2x2. Prior good behaviour unregressed (11 → no marker, 12 → 2 more,
+40 → 30 more; `e` still opens the editor). `cargo test` 250 passed / 0
+failed at `5ee8c05`.
+
+## Known limitation — deliberate, not an oversight
+
+**Terminals of roughly 10 rows or fewer at 80 columns cut the body with no
+indication.** When the header alone fills the box, no row remains for the
+marker and it is clipped. Boundary measured: 80x11 shows
+`… 41 more lines — press e to open`; 80x10 shows the six header lines and
+drops a 40-line body entirely, silently.
+
+This violates the ticket's own acceptance criterion, and is accepted anyway
+— the same call the help overlay (`zgfki6`) made for its sub-13-row tier.
+A 10-row terminal is reachable (a horizontal tmux split), so this is a real
+if narrow gap, not an impossible one. Decision taken deliberately by the
+user on 2026-09-25 rather than spending another rework round, and recorded
+in a comment at the truncation site in `src/tui/render.rs` so a future
+reader does not mistake it for a bug. If it is ever revisited, the fix is
+the same shape as the one above: when `header_rows + marker_rows >
+inner_height`, let the marker win — truncate the header, or fall back to a
+shorter marker.
