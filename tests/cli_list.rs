@@ -574,3 +574,203 @@ fn list_sorted_by_status_then_created_at() {
         lines[2]
     );
 }
+
+// ── colour ───────────────────────────────────────────────────────────────
+
+#[test]
+fn list_piped_output_has_no_ansi_escapes() {
+    // The test harness always pipes stdout (`std::process::Command::output`
+    // never allocates a pty), so this exercises the default, script-facing
+    // path with no env-var gymnastics required.
+    let dir = common::test_dir("list_piped_output_has_no_ansi_escapes");
+    common::tickets(&dir, &["init"]);
+    common::create_ticket(&dir, "Done ticket");
+    let (id, _) = common::create_ticket(&dir, "Done ticket two");
+    common::tickets(&dir, &["edit", &id, "--status", "done"]);
+
+    let out = common::tickets(&dir, &["list"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains('\u{1b}'),
+        "piped output must contain no ANSI escape bytes: {:?}",
+        stdout
+    );
+}
+
+#[test]
+fn list_piped_output_is_byte_identical_to_the_uncoloured_format() {
+    // Without any colour-forcing env var, a pipe is not a terminal, so the
+    // default path must produce exactly the pre-colour row format — proving
+    // the change is invisible to scripts that don't opt in with
+    // `CLICOLOR_FORCE`. Assert against a hand-built expected string (rather
+    // than comparing two live runs) so a regression that coloured the
+    // default pipe path would be caught even though it "looks the same as
+    // itself".
+    let dir = common::test_dir("list_piped_output_is_byte_identical_to_the_uncoloured_format");
+    common::tickets(&dir, &["init"]);
+    let (id_done, _) = common::create_ticket(&dir, "Ticket one");
+    common::tickets(&dir, &["edit", &id_done, "--status", "done"]);
+    let (id_draft, _) = common::create_ticket(&dir, "Ticket two");
+
+    let out = common::tickets(&dir, &["list"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    // Widths: id is always 6 chars; status column is `max(len, 6)` (both
+    // "draft" and "done" are shorter, so it's 6); type column is
+    // `max(display_width("🔧 task"), 4)` = 7 (emoji is 2 display columns).
+    let expected = format!(
+        "{id_draft}  draft   🔧 task  Ticket two\n{id_done}  done    🔧 task  Ticket one\n",
+    );
+    assert_eq!(
+        stdout, expected,
+        "piped output must match the plain, uncoloured row format byte for byte"
+    );
+}
+
+#[test]
+fn list_no_color_suppresses_escapes_even_when_forced() {
+    // NO_COLOR must win over CLICOLOR_FORCE when both are set.
+    let dir = common::test_dir("list_no_color_suppresses_escapes_even_when_forced");
+    common::tickets(&dir, &["init"]);
+    let (id, _) = common::create_ticket(&dir, "Done ticket");
+    common::tickets(&dir, &["edit", &id, "--status", "done"]);
+
+    let out = common::tickets_with_envs(
+        &dir,
+        &["list"],
+        &[("NO_COLOR", "1"), ("CLICOLOR_FORCE", "1")],
+    );
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains('\u{1b}'),
+        "NO_COLOR must suppress escapes even with CLICOLOR_FORCE set: {:?}",
+        stdout
+    );
+}
+
+#[test]
+fn list_forced_colour_marks_done_green_and_review_purple() {
+    let dir = common::test_dir("list_forced_colour_marks_done_green_and_review_purple");
+    common::tickets(&dir, &["init"]);
+    let (id_done, _) = common::create_ticket(&dir, "Done ticket");
+    common::tickets(&dir, &["edit", &id_done, "--status", "done"]);
+    let (id_review, _) = common::create_ticket(&dir, "Review ticket");
+    common::tickets(&dir, &["edit", &id_review, "--status", "review"]);
+
+    let out = common::tickets_with_envs(&dir, &["list"], &[("CLICOLOR_FORCE", "1")]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let done_line = stdout
+        .lines()
+        .find(|l| l.contains("Done ticket"))
+        .expect("done line present");
+    let review_line = stdout
+        .lines()
+        .find(|l| l.contains("Review ticket"))
+        .expect("review line present");
+
+    assert!(
+        done_line.contains("\u{1b}[32m"),
+        "done row should carry the green code: {:?}",
+        done_line
+    );
+    assert!(
+        review_line.contains("\u{1b}[35m"),
+        "review row should carry the purple (magenta) code: {:?}",
+        review_line
+    );
+}
+
+#[test]
+fn list_forced_colour_leaves_draft_and_todo_plain() {
+    let dir = common::test_dir("list_forced_colour_leaves_draft_and_todo_plain");
+    common::tickets(&dir, &["init"]);
+    let (id_todo, _) = common::create_ticket(&dir, "Todo ticket");
+    common::tickets(&dir, &["edit", &id_todo, "--status", "todo"]);
+    common::create_ticket(&dir, "Draft ticket"); // draft is the default status
+
+    let out = common::tickets_with_envs(&dir, &["list"], &[("CLICOLOR_FORCE", "1")]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains('\u{1b}'),
+        "draft and todo rows should carry no escapes even with colour forced: {:?}",
+        stdout
+    );
+}
+
+#[test]
+fn list_forced_colour_keeps_title_column_aligned_by_position() {
+    // Column position, not whole-line string compare, is the trustworthy way
+    // to assert alignment survives colouring: a padding-after-colouring bug
+    // would make every row a different length but the naive "does it look
+    // right" check on colourless output would never catch it.
+    let dir = common::test_dir("list_forced_colour_keeps_title_column_aligned_by_position");
+    common::tickets(&dir, &["init"]);
+    let (id_done, _) = common::create_ticket(&dir, "Alpha title");
+    common::tickets(&dir, &["edit", &id_done, "--status", "done"]);
+    let (id_review, _) = common::create_ticket(&dir, "Beta title");
+    common::tickets(&dir, &["edit", &id_review, "--status", "review"]);
+    common::create_ticket(&dir, "Gamma title"); // draft, uncoloured
+
+    let out = common::tickets_with_envs(&dir, &["list"], &[("CLICOLOR_FORCE", "1")]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 3);
+
+    // Compare the *stripped* (colour-code-free) column position of each
+    // title, since colour codes shift raw byte offsets but must not shift
+    // the rendered column a real terminal would show. Find each row by
+    // content rather than assuming an index — `list` sorts by status, so
+    // the coloured `done` and `review` rows are not necessarily first.
+    let stripped: Vec<String> = lines.iter().map(|l| strip_ansi(l)).collect();
+    let find_col = |needle: &str| {
+        stripped
+            .iter()
+            .find_map(|l| l.find(needle))
+            .unwrap_or_else(|| panic!("{needle} not found in output: {stripped:?}"))
+    };
+    let alpha_col = find_col("Alpha title");
+    let beta_col = find_col("Beta title");
+    let gamma_col = find_col("Gamma title");
+    assert_eq!(
+        alpha_col, beta_col,
+        "coloured (done) and coloured (review) rows must align"
+    );
+    assert_eq!(
+        beta_col, gamma_col,
+        "coloured and uncoloured rows must align"
+    );
+}
+
+/// Strip ANSI CSI escape sequences (`\x1b[...m`) from `s`, for asserting on
+/// visible column position independent of colour codes.
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::new();
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            // Consume `[`, then digits/`;`, then the terminating letter.
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                for c in chars.by_ref() {
+                    if c.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+                continue;
+            }
+        }
+        out.push(c);
+    }
+    out
+}

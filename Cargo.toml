@@ -24,6 +24,8 @@ crossterm = "0.28"
 notify = "6"
 arboard = "3"
 unicode-width = "0.2"
+anstream = "1"
+anstyle = "1"
 
 [dev-dependencies]
 toml = "0.8"
