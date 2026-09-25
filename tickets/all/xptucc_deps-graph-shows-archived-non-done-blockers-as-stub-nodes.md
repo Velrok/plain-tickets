@@ -2,14 +2,14 @@
 id: xptucc
 title: deps-graph shows archived non-done blockers as stub nodes
 type: task
-status: todo
+status: in-progress
 tags:
 - deps-graph
 parent: fyihf8
 blocked_by:
 - ihqh45
 created_at: 2026-09-23T10:13:43.770803Z
-updated_at: 2026-09-23T10:28:42.304204Z
+updated_at: 2026-09-25T12:21:29.391993Z
 ---
 
 ## Behaviour
