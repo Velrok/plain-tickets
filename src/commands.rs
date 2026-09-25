@@ -251,6 +251,76 @@ fn matches_filters(
         .all(|tag| ticket.front_matter.tags.contains(tag))
 }
 
+/// A ticket file that exists in `all/` but could not be turned into a
+/// `Ticket` — either the file could not be read, or its contents could not
+/// be parsed. Recorded rather than discarded so `cmd_list` can tell the
+/// user something was dropped instead of silently listing fewer tickets
+/// than exist on disk (4aawv9, mirroring fd38vu's fix in the TUI).
+struct LoadFailure {
+    path: PathBuf,
+    reason: String,
+}
+
+/// Reads every `.md` file in `all_dir`, returning the tickets that loaded
+/// successfully alongside every failure encountered. Deliberately never
+/// drops a failure on the floor — the caller decides how to surface
+/// `failures`, but the type makes it impossible to forget them.
+fn load_tickets(all_dir: &Path) -> Result<(Vec<Ticket>, Vec<LoadFailure>)> {
+    let entries = std::fs::read_dir(all_dir)
+        .with_context(|| format!("could not read directory {}", all_dir.display()))?
+        .flatten()
+        .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("md"));
+
+    let mut tickets = Vec::new();
+    let mut failures = Vec::new();
+    for entry in entries {
+        let path = entry.path();
+        let raw = match std::fs::read_to_string(&path) {
+            Ok(raw) => raw,
+            Err(e) => {
+                failures.push(LoadFailure {
+                    path,
+                    reason: e.to_string(),
+                });
+                continue;
+            }
+        };
+        match raw.parse::<Ticket>() {
+            Ok(ticket) => tickets.push(ticket),
+            Err(reason) => failures.push(LoadFailure { path, reason }),
+        }
+    }
+    Ok((tickets, failures))
+}
+
+/// Stderr warning naming every file `load_tickets` could not read or parse,
+/// or `None` if nothing was dropped. Names the affected files (not just a
+/// count) so the user has somewhere to start looking. Kept off stdout so
+/// `tickets list` stays pipeable (3mqhe3 already had to fix a broken-pipe
+/// regression on this same loop).
+fn format_load_failures(failures: &[LoadFailure]) -> Option<String> {
+    if failures.is_empty() {
+        return None;
+    }
+    let details: Vec<String> = failures
+        .iter()
+        .map(|f| {
+            let name = f
+                .path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| f.path.display().to_string());
+            format!("{name} ({})", f.reason)
+        })
+        .collect();
+    Some(format!(
+        "warning: {} ticket{} could not be loaded: {}",
+        failures.len(),
+        if failures.len() == 1 { "" } else { "s" },
+        details.join(", ")
+    ))
+}
+
 pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
     let all_dir = dir.all();
     let unblocked_ctx = args
@@ -262,12 +332,13 @@ pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
         })
         .transpose()?;
 
-    let mut tickets: Vec<Ticket> = std::fs::read_dir(&all_dir)
-        .with_context(|| format!("could not read directory {}", all_dir.display()))?
-        .flatten()
-        .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("md"))
-        .filter_map(|e| std::fs::read_to_string(e.path()).ok())
-        .filter_map(|raw| raw.parse::<Ticket>().ok())
+    let (loaded_tickets, failures) = load_tickets(&all_dir)?;
+    if let Some(warning) = format_load_failures(&failures) {
+        eprintln!("{warning}");
+    }
+
+    let mut tickets: Vec<Ticket> = loaded_tickets
+        .into_iter()
         .filter(|t| matches_filters(t, &args.status, &args.r#type, &args.tag))
         .filter(|t| {
             unblocked_ctx
