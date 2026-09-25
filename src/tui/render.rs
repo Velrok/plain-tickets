@@ -607,6 +607,35 @@ mod tests {
         }
     }
 
+    // ── footer flash (fd38vu) ─────────────────────────────────────────────
+
+    /// The board footer is the mechanism `build_app`/`reload_tickets` (in
+    /// `src/tui/mod.rs`) use to surface dropped tickets — including at
+    /// startup, before any key has been pressed. Assert it against the
+    /// rendered buffer, not a constructed string, so a change to how the
+    /// footer picks its text is caught here too.
+    #[test]
+    fn footer_shows_flash_message_over_default_hint() {
+        let columns = vec![TicketStatus::Todo];
+        let tickets = vec![make_ticket("aaa111", "Only ticket", TicketStatus::Todo)];
+        let mut app = App::new(tickets, columns);
+        app.flash = Some((
+            "1 ticket could not be loaded: bad.md (invalid front matter)".to_string(),
+            std::time::Instant::now(),
+        ));
+        let output = render_to_string(&app, 70, 10);
+        assert!(
+            output.contains("1 ticket could not be loaded: bad.md"),
+            "flash message not shown in footer: {}",
+            output
+        );
+        assert!(
+            !output.contains("h/l col"),
+            "default footer hint should be replaced by the flash: {}",
+            output
+        );
+    }
+
     // ── scroll ─────────────────────────────────────────────────────────────
 
     #[test]

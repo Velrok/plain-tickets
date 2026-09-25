@@ -26,8 +26,7 @@ use app::{Cmd, Message, update};
 
 pub fn run(working_dir: WorkingDir, cfg: &Config) -> Result<()> {
     let columns = cfg.tui.kanban_columns.clone();
-    let tickets = load_tickets(&working_dir)?;
-    let mut app = App::new(tickets, columns);
+    let mut app = build_app(&working_dir, columns)?;
 
     // Watch tickets/all/ for external file changes.
     let (fs_tx, fs_rx) = mpsc::channel::<notify::Result<notify::Event>>();
@@ -67,7 +66,7 @@ fn event_loop<B: ratatui::backend::Backend + std::io::Write>(
             fs_changed = true;
         }
         if fs_changed {
-            app.set_tickets(load_tickets(working_dir)?);
+            reload_tickets(app, working_dir)?;
         }
 
         // Poll for a key event with a short timeout so the loop stays responsive
@@ -170,7 +169,7 @@ fn open_in_editor<B: ratatui::backend::Backend + std::io::Write>(
     suspend(terminal)?;
     launch_editor(&path);
     resume(terminal)?;
-    app.set_tickets(load_tickets(working_dir)?);
+    reload_tickets(app, working_dir)?;
     Ok(())
 }
 
@@ -187,7 +186,7 @@ fn create_and_edit<B: ratatui::backend::Backend + std::io::Write>(
     suspend(terminal)?;
     launch_editor(&path);
     resume(terminal)?;
-    app.set_tickets(load_tickets(working_dir)?);
+    reload_tickets(app, working_dir)?;
     Ok(())
 }
 
@@ -201,16 +200,103 @@ fn copy_id_to_clipboard(app: &mut App, id: &str) {
     app.flash = Some((msg, Instant::now()));
 }
 
-fn load_tickets(working_dir: &WorkingDir) -> Result<Vec<Ticket>> {
+/// Build the initial `App` from disk, surfacing any tickets that failed to
+/// read or parse as a flash message rather than dropping them silently.
+///
+/// This runs before the terminal is touched (see `run`), so a flash seeded
+/// here is the *only* signal available at startup — there is no `App` yet
+/// for a later call site to write to. See fd38vu: the motivating failure
+/// (a stale binary that couldn't deserialise `status: review`) happened
+/// exactly at this point, before any per-key command had a chance to run.
+fn build_app(working_dir: &WorkingDir, columns: Vec<TicketStatus>) -> Result<App> {
+    let (tickets, failures) = load_tickets(working_dir)?;
+    let mut app = App::new(tickets, columns);
+    seed_load_flash(&mut app, &failures);
+    Ok(app)
+}
+
+/// Reload tickets into an already-running `App` (e.g. after an external
+/// edit or a filesystem watch event), surfacing any read/parse failures the
+/// same way `build_app` does at startup.
+fn reload_tickets(app: &mut App, working_dir: &WorkingDir) -> Result<()> {
+    let (tickets, failures) = load_tickets(working_dir)?;
+    app.set_tickets(tickets);
+    seed_load_flash(app, &failures);
+    Ok(())
+}
+
+fn seed_load_flash(app: &mut App, failures: &[LoadFailure]) {
+    if let Some(msg) = format_load_failures(failures) {
+        app.flash = Some((msg, Instant::now()));
+    }
+}
+
+/// A ticket file that exists in `tickets/all/` but could not be turned into
+/// a `Ticket` — either the file could not be read, or its contents could
+/// not be parsed. Recorded rather than discarded so the caller can tell the
+/// user something was dropped (fd38vu).
+struct LoadFailure {
+    path: PathBuf,
+    reason: String,
+}
+
+/// Reads every `.md` file in `working_dir`'s `all/` directory, returning the
+/// tickets that loaded successfully alongside every failure encountered.
+/// Deliberately never drops a failure on the floor — the caller decides how
+/// to surface `failures`, but the type makes it impossible to forget them.
+fn load_tickets(working_dir: &WorkingDir) -> Result<(Vec<Ticket>, Vec<LoadFailure>)> {
     let all_dir = working_dir.all();
-    let tickets = std::fs::read_dir(&all_dir)
+    let entries = std::fs::read_dir(&all_dir)
         .with_context(|| format!("could not read {}", all_dir.display()))?
         .flatten()
-        .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("md"))
-        .filter_map(|e| std::fs::read_to_string(e.path()).ok())
-        .filter_map(|raw| raw.parse::<Ticket>().ok())
+        .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("md"));
+
+    let mut tickets = Vec::new();
+    let mut failures = Vec::new();
+    for entry in entries {
+        let path = entry.path();
+        let raw = match std::fs::read_to_string(&path) {
+            Ok(raw) => raw,
+            Err(e) => {
+                failures.push(LoadFailure {
+                    path,
+                    reason: e.to_string(),
+                });
+                continue;
+            }
+        };
+        match raw.parse::<Ticket>() {
+            Ok(ticket) => tickets.push(ticket),
+            Err(reason) => failures.push(LoadFailure { path, reason }),
+        }
+    }
+    Ok((tickets, failures))
+}
+
+/// Footer flash text for tickets `load_tickets` could not read or parse, or
+/// `None` if nothing was dropped. Names the affected files (not just a
+/// count) so the user has somewhere to start looking.
+fn format_load_failures(failures: &[LoadFailure]) -> Option<String> {
+    if failures.is_empty() {
+        return None;
+    }
+    let details: Vec<String> = failures
+        .iter()
+        .map(|f| {
+            let name = f
+                .path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| f.path.display().to_string());
+            format!("{name} ({})", f.reason)
+        })
         .collect();
-    Ok(tickets)
+    Some(format!(
+        "{} ticket{} could not be loaded: {}",
+        failures.len(),
+        if failures.len() == 1 { "" } else { "s" },
+        details.join(", ")
+    ))
 }
 
 fn find_ticket_path(working_dir: &WorkingDir, ticket: &Ticket) -> Option<PathBuf> {
@@ -286,6 +372,145 @@ fn resume<B: ratatui::backend::Backend + std::io::Write>(terminal: &mut Terminal
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── load_tickets / build_app: read & parse failures (fd38vu) ────────────
+
+    fn tmp_dir(name: &str) -> PathBuf {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join(".testing")
+            .join(format!("tui_{name}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("all")).unwrap();
+        std::fs::create_dir_all(dir.join("archived")).unwrap();
+        dir
+    }
+
+    fn write_ticket_file(dir: &Path, filename: &str, contents: &str) {
+        std::fs::write(dir.join("all").join(filename), contents).unwrap();
+    }
+
+    fn valid_ticket_contents(id: &str) -> String {
+        format!(
+            "---\nid: {id}\ntitle: Valid ticket\ntype: task\nstatus: todo\ntags: []\nparent: null\nblocked_by: []\ncreated_at: 2000-01-01T00:00:00Z\nupdated_at: 2000-01-01T00:00:00Z\n---\n"
+        )
+    }
+
+    #[test]
+    fn load_tickets_reports_unparseable_file_without_dropping_valid_ones() {
+        let dir = tmp_dir("unparseable");
+        write_ticket_file(&dir, "a1_valid.md", &valid_ticket_contents("a1"));
+        write_ticket_file(&dir, "b2_broken.md", "---\nstatus: nonsense-status\n---\n");
+
+        let working_dir = WorkingDir::new(dir).unwrap();
+        let (tickets, failures) = load_tickets(&working_dir).unwrap();
+
+        assert_eq!(tickets.len(), 1, "valid ticket must still load");
+        assert_eq!(tickets[0].front_matter.id.to_string(), "a1");
+        assert_eq!(
+            failures.len(),
+            1,
+            "broken ticket must be recorded, not dropped"
+        );
+        assert!(failures[0].path.to_string_lossy().contains("b2_broken.md"));
+    }
+
+    #[test]
+    fn load_tickets_reports_unreadable_file_without_dropping_valid_ones() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tmp_dir("unreadable");
+        write_ticket_file(&dir, "a1_valid.md", &valid_ticket_contents("a1"));
+        let locked_path = dir.join("all").join("b2_locked.md");
+        std::fs::write(&locked_path, valid_ticket_contents("b2")).unwrap();
+        std::fs::set_permissions(&locked_path, std::fs::Permissions::from_mode(0o000)).unwrap();
+
+        // Sanity-check the fixture before trusting it: some environments
+        // (notably running as root) ignore mode 000 entirely.
+        let still_readable = std::fs::read_to_string(&locked_path).is_ok();
+
+        let result = load_tickets(&WorkingDir::new(dir).unwrap());
+
+        // Restore permissions regardless of outcome, so cleanup/inspection
+        // of `.testing/` afterwards isn't left blocked.
+        let _ = std::fs::set_permissions(&locked_path, std::fs::Permissions::from_mode(0o644));
+
+        if still_readable {
+            eprintln!(
+                "skipping load_tickets_reports_unreadable_file_without_dropping_valid_ones: \
+                 chmod 000 did not make the file unreadable (running as root?)"
+            );
+            return;
+        }
+
+        let (tickets, failures) = result.unwrap();
+        assert_eq!(tickets.len(), 1, "valid ticket must still load");
+        assert_eq!(tickets[0].front_matter.id.to_string(), "a1");
+        assert_eq!(
+            failures.len(),
+            1,
+            "unreadable ticket must be recorded, not dropped"
+        );
+        assert!(failures[0].path.to_string_lossy().contains("b2_locked.md"));
+    }
+
+    #[test]
+    fn format_load_failures_none_when_nothing_failed() {
+        assert!(format_load_failures(&[]).is_none());
+    }
+
+    #[test]
+    fn format_load_failures_names_files_and_counts_them() {
+        let failures = vec![
+            LoadFailure {
+                path: PathBuf::from("a1_broken.md"),
+                reason: "invalid front matter: missing field `status`".to_string(),
+            },
+            LoadFailure {
+                path: PathBuf::from("b2_locked.md"),
+                reason: "permission denied".to_string(),
+            },
+        ];
+        let msg = format_load_failures(&failures).unwrap();
+        assert!(msg.contains("2 tickets"), "message was: {msg}");
+        assert!(msg.contains("a1_broken.md"), "message was: {msg}");
+        assert!(msg.contains("b2_locked.md"), "message was: {msg}");
+    }
+
+    #[test]
+    fn format_load_failures_singular_for_one_failure() {
+        let failures = vec![LoadFailure {
+            path: PathBuf::from("a1_broken.md"),
+            reason: "invalid front matter".to_string(),
+        }];
+        let msg = format_load_failures(&failures).unwrap();
+        assert!(msg.starts_with("1 ticket "), "message was: {msg}");
+    }
+
+    #[test]
+    fn build_app_seeds_flash_when_a_ticket_fails_to_load() {
+        let dir = tmp_dir("build_app_flash");
+        write_ticket_file(&dir, "a1_valid.md", &valid_ticket_contents("a1"));
+        write_ticket_file(&dir, "b2_broken.md", "not front matter at all");
+
+        let working_dir = WorkingDir::new(dir).unwrap();
+        let app = build_app(&working_dir, vec![crate::domain_types::TicketStatus::Todo]).unwrap();
+
+        assert_eq!(app.tickets.len(), 1);
+        let (msg, _) = app.flash.expect("startup flash must be seeded when a ticket fails to load — this is the only signal available before any key is pressed");
+        assert!(msg.contains("b2_broken.md"), "flash was: {msg}");
+    }
+
+    #[test]
+    fn build_app_no_flash_when_everything_loads_cleanly() {
+        let dir = tmp_dir("build_app_no_flash");
+        write_ticket_file(&dir, "a1_valid.md", &valid_ticket_contents("a1"));
+
+        let working_dir = WorkingDir::new(dir).unwrap();
+        let app = build_app(&working_dir, vec![crate::domain_types::TicketStatus::Todo]).unwrap();
+
+        assert_eq!(app.tickets.len(), 1);
+        assert!(app.flash.is_none());
+    }
 
     #[test]
     fn board_y_maps_to_copy_id() {
