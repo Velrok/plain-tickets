@@ -139,24 +139,37 @@ deliberately break the production code it covers and confirm **that** test goes
 red for the right reason, then restore and confirm green again. Report which
 mutation reddened which test.
 
-**Restore with a file copy, not `git checkout -- <file>`.** `git checkout --`
-discards working-tree changes, so it is a destructive operation that prompts the
-user for permission on every single call — across several mutations and several
-concurrent agents that becomes a flood of prompts for what is really just
-putting a file back.
+**Restore from your last commit, not with `git checkout --`, and never via a
+temp-file copy:**
 
 ```sh
-cp src/thing.rs /tmp/thing.rs.orig   # once, before the first mutation
-# ...mutate, run tests, observe the red...
-cp /tmp/thing.rs.orig src/thing.rs   # restore
+git show HEAD:src/thing.rs > src/thing.rs
 ```
 
-Keep the backup outside the repo so it is not picked up as an untracked file.
-Confirm the restore with `git status --short` and `git diff --stat`, which are
-read-only and prompt-free — a clean diff is the proof the tree is back at HEAD.
+Then confirm with `git status --short` and `git diff --stat` — both read-only
+and prompt-free. A clean diff is the proof the tree is back at HEAD.
 
-The same reasoning rules out `git stash` for this, on top of the shared-stack
-hazard described below.
+Why not the two obvious alternatives:
+
+- **`git checkout -- <file>`** discards working-tree changes, so it is a
+  destructive operation that prompts the user for permission on every call.
+  Several mutations across several concurrent agents turns that into a flood of
+  prompts for what is only putting a file back.
+- **`cp` to a temp path** looks harmless and is not. `/tmp/claude/` is a
+  **shared** working directory, not private per agent. Two agents backing up
+  `src/commands.rs` under the same filename clobbered each other, and the
+  restore returned a *different ticket's* code — losing uncommitted work. If
+  you back up by copying, the filename must be unique per agent, and even then
+  `git show` is strictly better because nothing is written outside the worktree
+  at all.
+
+The same reasoning rules out `git stash`, on top of the shared-stack hazard
+described below.
+
+**Commit each green step before you start mutating.** Mutation testing is the
+one part of the workflow that deliberately corrupts your working tree, so it is
+the worst possible moment to be carrying uncommitted work. The incident above
+only cost an hour because the fix had never been committed.
 
 This is not ceremony. It is how the real defects in this repo have been caught:
 injecting `return Vec::new()` into `col_indices` reddened three tests;
