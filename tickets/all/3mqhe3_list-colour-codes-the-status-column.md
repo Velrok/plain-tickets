@@ -2,7 +2,7 @@
 id: 3mqhe3
 title: list colour codes the status column
 type: task
-status: in-progress
+status: review
 tags:
 - list
 - ux
@@ -10,9 +10,8 @@ parent: null
 blocked_by:
 - chphvf
 created_at: 2026-09-23T11:12:47.313368Z
-updated_at: 2026-09-25T12:05:41.226261Z
+updated_at: 2026-09-25T12:05:42.759499Z
 ---
-
 
 ## Behaviour
 
