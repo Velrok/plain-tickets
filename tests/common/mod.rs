@@ -31,6 +31,20 @@ pub fn tickets(dir: &Path, args: &[&str]) -> std::process::Output {
         .expect("failed to run tickets binary")
 }
 
+/// Like [`tickets`], but with extra environment variables set on top of
+/// `TICKETS_DIR` — for exercising colour env vars (`NO_COLOR`,
+/// `CLICOLOR_FORCE`) without disturbing the plain `tickets` helper used
+/// everywhere else.
+#[allow(dead_code)]
+pub fn tickets_with_envs(dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> std::process::Output {
+    Command::new(bin())
+        .args(args)
+        .env("TICKETS_DIR", dir)
+        .envs(envs.iter().copied())
+        .output()
+        .expect("failed to run tickets binary")
+}
+
 /// Run `init` then `new --title <title>`. Returns `(id, filename)`.
 #[allow(dead_code)]
 pub fn create_ticket(dir: &Path, title: &str) -> (String, String) {

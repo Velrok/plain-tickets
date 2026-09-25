@@ -1,4 +1,5 @@
 use std::io::Read as _;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
@@ -318,14 +319,29 @@ pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
         .unwrap_or(4)
         .max(4);
 
-    for (id, status, type_col, title) in &rows {
-        println!(
+    // Colour is applied *after* padding, never before: ANSI escapes are
+    // zero-display-width bytes, so colouring first would make the padding
+    // calculation above count escape bytes as columns and break alignment.
+    // `anstream::stdout()` strips the escapes back out again when stdout
+    // isn't a colour-capable terminal (respecting `NO_COLOR` and
+    // `CLICOLOR_FORCE`), so writing through it here is enough to keep piped
+    // output byte-identical to the uncoloured path.
+    let mut out = anstream::stdout();
+    for (ticket, (id, status, type_col, title)) in tickets.iter().zip(&rows) {
+        let padded_status = pad_to_display_width(status, status_w);
+        let styled_status = match ticket.front_matter.status.style() {
+            Some(style) => format!("{style}{padded_status}{style:#}"),
+            None => padded_status,
+        };
+        writeln!(
+            out,
             "{}  {}  {}  {}",
             pad_to_display_width(id, id_w),
-            pad_to_display_width(status, status_w),
+            styled_status,
             pad_to_display_width(type_col, type_w),
             title,
-        );
+        )
+        .context("failed to write to stdout")?;
     }
     Ok(())
 }
