@@ -2,13 +2,13 @@
 id: 3p7tpt
 title: list --unblocked filters to tickets with no unfinished blockers
 type: task
-status: review
+status: done
 tags:
 - deps-graph
 parent: fyihf8
 blocked_by: []
 created_at: 2026-09-23T10:14:02.399599Z
-updated_at: 2026-09-23T11:01:01.211862Z
+updated_at: 2026-09-25T11:38:29.319923Z
 ---
 
 ## Behaviour
