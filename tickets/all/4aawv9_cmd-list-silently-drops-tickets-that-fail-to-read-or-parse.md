@@ -2,13 +2,13 @@
 id: 4aawv9
 title: cmd_list silently drops tickets that fail to read or parse
 type: bug
-status: todo
+status: in-progress
 tags:
 - tui
 parent: null
 blocked_by: []
 created_at: 2026-09-25T12:28:32.761590Z
-updated_at: 2026-09-25T12:28:32.761590Z
+updated_at: 2026-09-25T12:32:02.790080Z
 ---
 
 ## Behaviour
