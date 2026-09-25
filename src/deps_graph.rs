@@ -6,10 +6,11 @@
 //! `deps-graph` nests each ticket under everything IT blocks — so a root is
 //! a ticket with no unresolved blocker, and its children are the tickets
 //! it unblocks.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
 use petgraph::Direction;
+use petgraph::algo::{tarjan_scc, toposort};
 use petgraph::graph::{DiGraph, NodeIndex};
 
 use crate::application_types::WorkingDir;
@@ -252,6 +253,26 @@ impl DepsGraph {
         ids.sort_by_key(|id| self.sort_keys[id]);
     }
 
+    /// IDs participating in a `blocked_by` dependency cycle, sorted. Empty
+    /// when the graph is acyclic.
+    ///
+    /// `toposort` detects whether a cycle exists at all (cheap, and matches
+    /// the epic's stated detection mechanism); `tarjan_scc` then names every
+    /// id involved, via strongly-connected components of size > 1 (or a
+    /// single node with a self-loop, e.g. a ticket blocked by itself).
+    pub fn cyclic_ids(&self) -> Vec<TicketId> {
+        if toposort(&self.graph, None).is_ok() {
+            return Vec::new();
+        }
+        let mut ids: Vec<TicketId> = tarjan_scc(&self.graph)
+            .into_iter()
+            .filter(|scc| scc.len() > 1 || self.graph.contains_edge(scc[0], scc[0]))
+            .flat_map(|scc| scc.into_iter().map(|ix| self.graph[ix].clone()))
+            .collect();
+        ids.sort_by_key(ToString::to_string);
+        ids
+    }
+
     fn label(&self, id: &TicketId) -> String {
         if let Some(stub) = self.stubs.get(id) {
             return stub.label(id);
@@ -296,11 +317,43 @@ fn load_dir(path: &std::path::Path) -> Result<HashMap<TicketId, Ticket>> {
 }
 
 /// Render the full forest as an indentation tree.
+///
+/// A ticket is nested under EVERY blocker it has: diamonds (and cycles)
+/// repeat a node under each of its parents. The first occurrence (in
+/// traversal order) expands its subtree in full; a later occurrence within
+/// the same still-open branch is a genuine cycle, marked
+/// `(cycle: see above)`; a later occurrence reached via a different branch
+/// is a diamond repeat, marked `(see above)`. Either way recursion stops
+/// there, so nothing loops and nothing is printed more than once in full.
+///
+/// Some ids are never reached by descending from a zero-incoming-edge root
+/// at all — every member of a cycle that has no external edge in is exactly
+/// this case. Those are given a synthetic root each, in `created_at` order,
+/// after the real roots, so a cycle is never silently invisible.
 pub fn render_forest(graph: &DepsGraph) -> String {
     let mut output = String::new();
+    let mut path: HashSet<TicketId> = HashSet::new();
+    let mut rendered: HashSet<TicketId> = HashSet::new();
+
     for root in graph.roots() {
-        render_node(graph, &root, "", "", &mut output);
+        if !rendered.contains(&root) {
+            render_node(graph, &root, "", "", &mut path, &mut rendered, &mut output);
+        }
     }
+
+    let mut leftover: Vec<TicketId> = graph
+        .tickets
+        .keys()
+        .filter(|id| !rendered.contains(*id))
+        .cloned()
+        .collect();
+    graph.sort_by_created_at(&mut leftover);
+    for id in leftover {
+        if !rendered.contains(&id) {
+            render_node(graph, &id, "", "", &mut path, &mut rendered, &mut output);
+        }
+    }
+
     output
 }
 
@@ -309,9 +362,30 @@ fn render_node(
     id: &TicketId,
     line_prefix: &str,
     child_base: &str,
+    path: &mut HashSet<TicketId>,
+    rendered: &mut HashSet<TicketId>,
     output: &mut String,
 ) {
+    if path.contains(id) {
+        output.push_str(&format!(
+            "{}{}  (cycle: see above)\n",
+            line_prefix,
+            graph.label(id)
+        ));
+        return;
+    }
+    if rendered.contains(id) {
+        output.push_str(&format!(
+            "{}{}  (see above)\n",
+            line_prefix,
+            graph.label(id)
+        ));
+        return;
+    }
+
     output.push_str(&format!("{}{}\n", line_prefix, graph.label(id)));
+    rendered.insert(id.clone());
+    path.insert(id.clone());
 
     let children = graph.children(id);
     for (i, child) in children.iter().enumerate() {
@@ -326,9 +400,13 @@ fn render_node(
             child,
             &format!("{}{}", child_base, connector),
             &format!("{}{}", child_base, extension),
+            path,
+            rendered,
             output,
         );
     }
+
+    path.remove(id);
 }
 
 #[cfg(test)]
