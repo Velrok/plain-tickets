@@ -2,13 +2,13 @@
 id: fd38vu
 title: TUI silently drops tickets that fail to read or parse
 type: bug
-status: in-progress
+status: done
 tags:
 - tui
 parent: null
 blocked_by: []
 created_at: 2026-09-25T12:08:10.138081Z
-updated_at: 2026-09-25T12:08:34.255994Z
+updated_at: 2026-09-25T12:28:15.222024Z
 ---
 
 ## Symptom
@@ -100,3 +100,44 @@ Do not fix them silently as scope creep.
   string
 - the "nothing is dropped without a signal" test is the one worth keeping -
   it is the invariant, and it will catch the next drop site someone adds
+
+## Implementation notes
+
+Landed as `8e46c2c`, merged to main 2026-09-25. Touches `src/tui/mod.rs` and
+`src/tui/render.rs` only.
+
+**Design.** `load_tickets` now returns `(Vec<Ticket>, Vec<LoadFailure>)` instead
+of `filter_map(...).ok()`. The type itself forces every caller to decide what to
+do with failures rather than letting `.ok()` discard them.
+
+The startup path was the hard case - it runs before `App::new`, so it had no
+flash to write to. A new `build_app(working_dir, columns) -> Result<App>` calls
+`load_tickets`, constructs the `App`, and seeds `app.flash` before the terminal
+is touched. The three post-`App` call sites (fs-watch reload and the two
+post-`$EDITOR` reloads) go through `reload_tickets(app, working_dir)`. Both
+funnel through one `seed_load_flash` helper - a single seam, not two paths.
+
+Reuses the existing footer-flash mechanism rather than inventing a parallel
+stderr codepath, so all four call sites report through one already-tested UI
+surface.
+
+**Scope call - `cmd_list` left alone.** `src/commands.rs:260-261` has the
+byte-identical `filter_map(...).ok()` pattern. Deliberately not fixed: the
+ticket scopes this to the TUI. Follow-up ticket filed.
+
+**Trade-off accepted.** The flash is transient (2s, existing `FLASH_DURATION`),
+matching existing UI conventions. Independent verification judged this a genuine
+residual weakness for the startup case specifically - a user who looks away
+misses it, and there is no way to recall the message. Follow-up ticket filed.
+
+**Tests.** 8 new unit tests in `src/tui/mod.rs` and `src/tui/render.rs`.
+Suite 257 -> 265 passed, 0 failed. clippy and fmt clean.
+
+**Independent verification (PASS).** Drove the real TUI for all four call sites
+including both `$EDITOR` paths with a fake editor that corrupts on save.
+Mutation testing confirmed the tests are discriminating: removing the
+`seed_load_flash` call reddened the startup regression test; making
+`load_tickets` discard its failure vector reddened three tests. Probing beyond
+the author's cases - multiple simultaneous failures (pluralisation holds), all
+tickets failing, empty `all/`, zero-byte file, front matter with no body, a
+directory named `*.md`, a ~200-char filename - found no defects and no panics.
