@@ -6,7 +6,7 @@
 //! `deps-graph` nests each ticket under everything IT blocks — so a root is
 //! a ticket with no unresolved blocker, and its children are the tickets
 //! it unblocks.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
 use petgraph::Direction;
@@ -202,10 +202,18 @@ fn load_dir(path: &std::path::Path) -> Result<HashMap<TicketId, Ticket>> {
 }
 
 /// Render the full forest as an indentation tree.
+///
+/// A ticket is nested under EVERY blocker it has: a diamond repeats a node
+/// under each of its parents. The first occurrence (in traversal order)
+/// expands its subtree in full; a later occurrence — reached via a
+/// different branch, after the first has already finished rendering — is a
+/// marked leaf (`(see above)`) and does not re-expand, so nothing is
+/// printed more than once in full.
 pub fn render_forest(graph: &DepsGraph) -> String {
     let mut output = String::new();
+    let mut rendered: HashSet<TicketId> = HashSet::new();
     for root in graph.roots() {
-        render_node(graph, &root, "", "", &mut output);
+        render_node(graph, &root, "", "", &mut rendered, &mut output);
     }
     output
 }
@@ -215,9 +223,20 @@ fn render_node(
     id: &TicketId,
     line_prefix: &str,
     child_base: &str,
+    rendered: &mut HashSet<TicketId>,
     output: &mut String,
 ) {
+    if rendered.contains(id) {
+        output.push_str(&format!(
+            "{}{}  (see above)\n",
+            line_prefix,
+            graph.label(id)
+        ));
+        return;
+    }
+
     output.push_str(&format!("{}{}\n", line_prefix, graph.label(id)));
+    rendered.insert(id.clone());
 
     let children = graph.children(id);
     for (i, child) in children.iter().enumerate() {
@@ -232,6 +251,7 @@ fn render_node(
             child,
             &format!("{}{}", child_base, connector),
             &format!("{}{}", child_base, extension),
+            rendered,
             output,
         );
     }

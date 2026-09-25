@@ -88,8 +88,8 @@ fn blocker_archived_and_done_never_appears_as_a_node_or_label() {
     );
 }
 
-// --- 2k12y3 / 9b88c0: fan-out ordering and disjoint chains as separate
-// roots. ---
+// --- 2k12y3 / 9b88c0 / 3yew0k: fan-out ordering, disjoint chains, and
+// repeated multi-blocker tickets. ---
 
 /// Find the ticket file for `id` under `dir/all` and overwrite its
 /// `created_at` front-matter value. Used to force a created_at ordering
@@ -201,4 +201,87 @@ fn orphan_ticket_renders_as_a_lone_root_line() {
     let stdout = String::from_utf8_lossy(&out.stdout);
 
     assert_eq!(stdout, format!("{orphan}  todo  Lone\n"));
+}
+
+#[test]
+fn diamond_renders_shared_ticket_under_both_blockers() {
+    let dir = common::test_dir("deps_graph_diamond_renders_shared_ticket_under_both_blockers");
+    common::tickets(&dir, &["init"]);
+    let a = create_todo_ticket(&dir, "Set up DB schema");
+    let c = create_todo_ticket(&dir, "Design API contract");
+    let d = create_todo_ticket(&dir, "Run migration in CI");
+    let f = create_todo_ticket(&dir, "Enable feature flag");
+    common::tickets(&dir, &["edit", &d, "--blocked-by", &a, "--blocked-by", &c]);
+    common::tickets(&dir, &["edit", &f, "--blocked-by", &d]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    // Full expansion under the first blocker (a, created first).
+    assert!(
+        stdout.contains(&format!(
+            "{a}  todo  Set up DB schema\n└── {d}  todo  Run migration in CI\n    └── {f}  todo  Enable feature flag\n"
+        )),
+        "expected full subtree under first blocker: {stdout}"
+    );
+    // Second occurrence, under c, is a marked leaf and does not re-expand.
+    assert!(
+        stdout.contains(&format!(
+            "{c}  todo  Design API contract\n└── {d}  todo  Run migration in CI  (see above)\n"
+        )),
+        "expected marked, non-expanding repeat under second blocker: {stdout}"
+    );
+    assert_eq!(
+        stdout.matches(&f).count(),
+        1,
+        "the final ticket must only be printed once, under the first occurrence: {stdout}"
+    );
+}
+
+#[test]
+fn nested_diamonds_two_converging_pairs_feed_one_final_ticket() {
+    let dir = common::test_dir("deps_graph_nested_diamonds_feed_one_final_ticket");
+    common::tickets(&dir, &["init"]);
+    // a/b -> m ; c/d -> n ; m/n -> z
+    let a = create_todo_ticket(&dir, "A");
+    let b = create_todo_ticket(&dir, "B");
+    let c = create_todo_ticket(&dir, "C");
+    let d = create_todo_ticket(&dir, "D");
+    let m = create_todo_ticket(&dir, "M");
+    let n = create_todo_ticket(&dir, "N");
+    let z = create_todo_ticket(&dir, "Z");
+    common::tickets(&dir, &["edit", &m, "--blocked-by", &a, "--blocked-by", &b]);
+    common::tickets(&dir, &["edit", &n, "--blocked-by", &c, "--blocked-by", &d]);
+    common::tickets(&dir, &["edit", &z, "--blocked-by", &m, "--blocked-by", &n]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    // z's full subtree should be expanded exactly once (under m, its first
+    // blocker by created_at), and m/n each individually should also only
+    // fully expand once, each under their own first blocker.
+    assert_eq!(
+        stdout.matches(&z).count(),
+        2,
+        "z is a leaf of both m and n, so it should appear as a marked repeat \
+         once and be expanded once: {stdout}"
+    );
+    assert!(
+        stdout.contains("  (see above)\n"),
+        "expected at least one (see above) marker: {stdout}"
+    );
+    // m and n each appear exactly twice (once fully expanded, once as a
+    // marked repeat) since each has two blockers.
+    assert_eq!(
+        stdout.matches(&m).count(),
+        2,
+        "m should appear twice: {stdout}"
+    );
+    assert_eq!(
+        stdout.matches(&n).count(),
+        2,
+        "n should appear twice: {stdout}"
+    );
 }
