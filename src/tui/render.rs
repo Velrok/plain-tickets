@@ -155,8 +155,6 @@ fn draw_detail(f: &mut Frame, app: &App) {
         fm.updated_at.format("%Y-%m-%d")
     )));
 
-    let header_len = lines.len();
-
     let mut body_lines: Vec<Line> = Vec::new();
     if !ticket.body.is_empty() {
         body_lines.push(Line::from(""));
@@ -171,21 +169,43 @@ fn draw_detail(f: &mut Frame, app: &App) {
     // was considered (see `4x7e81` implementation notes) and declined: it
     // needs new `App` state and keybindings, which is out of scope for a
     // render-only fix, and `e` already opens the ticket in an editor.
+    //
+    // Everything below is measured in *rendered rows*, not source lines: the
+    // box is only ~62 columns wide inside its border while real ticket bodies
+    // are wrapped at ~75 chars, so most body lines cost two rows. Counting
+    // source lines under-budgets and pushes the marker itself off the bottom.
+    let inner_width = area.width.saturating_sub(2); // left/right border
     let inner_height = area.height.saturating_sub(2) as usize; // top/bottom border
-    if header_len + body_lines.len() > inner_height {
-        let available_for_body = inner_height.saturating_sub(header_len).saturating_sub(1); // reserve one row for the marker itself
-        let shown = available_for_body.min(body_lines.len());
-        let hidden = body_lines.len() - shown;
-        lines.extend(body_lines.into_iter().take(shown));
-        lines.push(Line::styled(
-            format!(
-                "… {hidden} more line{} — press e to open",
-                if hidden == 1 { "" } else { "s" }
-            ),
-            Style::default().fg(Color::DarkGray),
-        ));
-    } else {
+
+    let header_rows: usize = lines.iter().map(|l| wrapped_rows(l, inner_width)).sum();
+    let body_rows: Vec<usize> = body_lines
+        .iter()
+        .map(|l| wrapped_rows(l, inner_width))
+        .collect();
+
+    if header_rows + body_rows.iter().sum::<usize>() <= inner_height {
         lines.extend(body_lines);
+    } else {
+        // Keep as many body lines as fit once the marker's own rows are
+        // reserved. The marker's height depends on the count it reports, so
+        // it is measured inside the loop rather than assumed to be one row.
+        let mut used = header_rows;
+        let mut shown = 0;
+        for (i, rows) in body_rows.iter().enumerate() {
+            let hidden = body_rows.len() - (i + 1);
+            if hidden == 0 {
+                break;
+            }
+            let marker = truncation_marker(hidden);
+            if used + rows + wrapped_rows(&marker, inner_width) > inner_height {
+                break;
+            }
+            used += rows;
+            shown = i + 1;
+        }
+        let hidden = body_rows.len() - shown;
+        lines.extend(body_lines.into_iter().take(shown));
+        lines.push(truncation_marker(hidden));
     }
 
     let block = Block::default()
@@ -197,6 +217,32 @@ fn draw_detail(f: &mut Frame, app: &App) {
 
     f.render_widget(Clear, area);
     f.render_widget(para, area);
+}
+
+/// How many rendered rows `line` occupies at `width`, under the same
+/// `Wrap { trim: false }` the detail view applies.
+///
+/// Delegates to `Paragraph::line_count` rather than dividing display width by
+/// column count: wrapping happens at word boundaries, so a naive division
+/// under-counts and would put us back where we started. Each source line wraps
+/// independently, so per-line counts sum to the paragraph's total.
+fn wrapped_rows(line: &Line<'_>, width: u16) -> usize {
+    Paragraph::new(line.clone())
+        .wrap(Wrap { trim: false })
+        .line_count(width)
+        .max(1)
+}
+
+/// The detail view's truncation marker, naming how many body lines are hidden
+/// and how to read them.
+fn truncation_marker(hidden: usize) -> Line<'static> {
+    Line::styled(
+        format!(
+            "… {hidden} more line{} — press e to open",
+            if hidden == 1 { "" } else { "s" }
+        ),
+        Style::default().fg(Color::DarkGray),
+    )
 }
 
 // ── help overlay ──────────────────────────────────────────────────────────────
@@ -873,6 +919,151 @@ mod tests {
         assert!(
             output.contains("more line") && output.contains("press e to open"),
             "one line over capacity should trigger the truncation marker: {output}"
+        );
+    }
+
+    /// Real ticket bodies are hard-wrapped at ~75 chars, but the detail box is
+    /// only ~62 columns wide inside its border, so every such line wraps onto
+    /// two rows. Truncating on unwrapped line count therefore overruns the box
+    /// and pushes the marker itself off the bottom - a silent cut, which is
+    /// exactly what this view must never do.
+    #[test]
+    fn detail_view_wrapped_body_shows_marker_in_rendered_output() {
+        let columns = vec![TicketStatus::Todo];
+        let body: String = (1..=20)
+            .map(|n| format!("line {n} {}", "padding word ".repeat(6)))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let tickets = vec![make_ticket_with_body(
+            "abc123",
+            "Fix login bug",
+            TicketStatus::Todo,
+            &body,
+        )];
+        let mut app = App::new(tickets, columns);
+        app.screen = Screen::Detail;
+        let output = render_to_string(&app, 80, 24);
+        assert!(
+            output.contains("more line") && output.contains("press e to open"),
+            "a wrapping body that overflows must render a visible truncation marker: {output}"
+        );
+    }
+
+    /// A handful of very long lines wraps to far more rows than it has lines,
+    /// so a line-count budget never even notices the overflow. Every hidden
+    /// line must still be accounted for by the marker.
+    #[test]
+    fn detail_view_few_very_long_lines_are_not_silently_cut() {
+        let columns = vec![TicketStatus::Todo];
+        let body: String = (1..=6)
+            .map(|n| format!("sentinel{n} {}", "lorem ipsum dolor sit amet ".repeat(9)))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let tickets = vec![make_ticket_with_body(
+            "abc123",
+            "Fix login bug",
+            TicketStatus::Todo,
+            &body,
+        )];
+        let mut app = App::new(tickets, columns);
+        app.screen = Screen::Detail;
+        let output = render_to_string(&app, 80, 24);
+
+        let shown = (1..=6)
+            .filter(|n| output.contains(&format!("sentinel{n}")))
+            .count();
+        let hidden = 6 - shown;
+        assert!(hidden > 0, "fixture should force truncation: {output}");
+        assert!(
+            output.contains(&format!("{hidden} more line")),
+            "expected the marker to account for {hidden} hidden lines: {output}"
+        );
+    }
+
+    /// Boundary in rendered rows: a wrapping body whose rows exactly fill the
+    /// box renders in full, with no marker.
+    ///
+    /// At 80x24 the detail box has 18 inner rows; the tagless header costs 6
+    /// rows plus a blank separator, leaving 11. Five body lines that each wrap
+    /// onto two rows, plus one single-row line, is exactly 11.
+    #[test]
+    fn detail_view_wrapped_body_exactly_filling_rows_shows_no_marker() {
+        let columns = vec![TicketStatus::Todo];
+        let mut body: Vec<String> = (1..=5)
+            .map(|n| format!("wide{n} {}", "alpha bravo charlie ".repeat(4)))
+            .collect();
+        body.push("narrow6".to_string());
+        let tickets = vec![make_ticket_with_body(
+            "abc123",
+            "Fix login bug",
+            TicketStatus::Todo,
+            &body.join("\n"),
+        )];
+        let mut app = App::new(tickets, columns);
+        app.screen = Screen::Detail;
+        let output = render_to_string(&app, 80, 24);
+        for n in 1..=5 {
+            assert!(
+                output.contains(&format!("wide{n}")),
+                "wide{n} should be visible when the wrapped body exactly fits: {output}"
+            );
+        }
+        assert!(
+            output.contains("narrow6"),
+            "the last body line should be visible when the wrapped body exactly fits: {output}"
+        );
+        assert!(
+            !output.contains("more line"),
+            "a body whose rows exactly fit should show no truncation marker: {output}"
+        );
+    }
+
+    /// Companion to the exact-fill case: adding one more single-row line puts
+    /// the body one *row* over the box while still well under the old line
+    /// count, so only a row-based budget notices the overflow.
+    #[test]
+    fn detail_view_wrapped_body_one_row_over_shows_marker() {
+        let columns = vec![TicketStatus::Todo];
+        let mut body: Vec<String> = (1..=5)
+            .map(|n| format!("wide{n} {}", "alpha bravo charlie ".repeat(4)))
+            .collect();
+        body.push("narrow6".to_string());
+        body.push("narrow7".to_string());
+        let tickets = vec![make_ticket_with_body(
+            "abc123",
+            "Fix login bug",
+            TicketStatus::Todo,
+            &body.join("\n"),
+        )];
+        let mut app = App::new(tickets, columns);
+        app.screen = Screen::Detail;
+        let output = render_to_string(&app, 80, 24);
+        assert!(
+            output.contains("more line") && output.contains("press e to open"),
+            "one row over capacity should trigger the truncation marker: {output}"
+        );
+    }
+
+    /// With a row budget, hiding exactly one line is reachable: a body whose
+    /// last line wraps onto two rows overflows by one line, not two. The
+    /// marker must read in the singular.
+    #[test]
+    fn detail_view_single_hidden_line_marker_is_singular() {
+        let columns = vec![TicketStatus::Todo];
+        let mut body: Vec<String> = (1..=10).map(|n| format!("line {n}")).collect();
+        body.push(format!("last {}", "alpha bravo charlie ".repeat(4)));
+        let tickets = vec![make_ticket_with_body(
+            "abc123",
+            "Fix login bug",
+            TicketStatus::Todo,
+            &body.join("\n"),
+        )];
+        let mut app = App::new(tickets, columns);
+        app.screen = Screen::Detail;
+        let output = render_to_string(&app, 80, 24);
+        assert!(
+            output.contains("1 more line — press e to open"),
+            "expected a singular marker for a single hidden line: {output}"
         );
     }
 
