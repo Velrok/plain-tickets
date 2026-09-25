@@ -2,15 +2,14 @@
 id: 4x7e81
 title: TUI detail view silently truncates long ticket bodies
 type: bug
-status: in-progress
+status: done
 tags:
 - tui
 parent: null
 blocked_by: []
 created_at: 2026-09-23T11:21:55.199665Z
-updated_at: 2026-09-25T12:05:06.830589Z
+updated_at: 2026-09-25T12:05:08.588836Z
 ---
-
 
 ## Problem
 
