@@ -2,7 +2,7 @@
 id: 3mqhe3
 title: list colour codes the status column
 type: task
-status: review
+status: done
 tags:
 - list
 - ux
@@ -10,7 +10,7 @@ parent: null
 blocked_by:
 - chphvf
 created_at: 2026-09-23T11:12:47.313368Z
-updated_at: 2026-09-25T12:05:42.759499Z
+updated_at: 2026-09-25T12:37:53.034402Z
 ---
 
 ## Behaviour
@@ -141,3 +141,47 @@ comparison of the default path — stronger than a self-comparison.
 
 **Out of scope, unchanged:** `tickets show` still emits ANSI into a pipe via
 `bat --color=auto`. That is a separate pre-existing wart.
+
+## Implementation notes
+
+Merged to main 2026-09-25. Colour feature `f1c7407`, broken-pipe fix `0e7fb57`.
+
+**Colour mapping** lives in `TicketStatus::style()` in `src/domain_types.rs`, with
+an explicit arm per variant and no wildcard, so a new status stays loud at
+compile time. `in-progress` yellow, `review` magenta, `done` green, `rejected`
+bright-black; `draft` and `todo` uncoloured.
+
+**Broken-pipe regression, found after the feature landed.** `cmd_list` is the
+only command that writes fallibly, so `list | head -1` exited 1 with a
+`failed to write to stdout` error. The write loop now matches on the `writeln!`
+result: `ErrorKind::BrokenPipe` returns `Ok(())` for a clean exit, every other
+error still propagates via `.context(...)`. Deliberately not a blanket
+`let _ =` - ENOSPC/EIO must still surface.
+
+**Independent verification (PASS).**
+
+- Colour under a real pty via `script -q`, with no forcing env vars. Piped and
+  redirected output checked with `xxd` for zero ESC bytes. `NO_COLOR` correctly
+  wins over `CLICOLOR_FORCE`; `TERM=dumb` also suppresses.
+- Padding proven correct non-visually: ANSI stripped from forced-colour output
+  and diffed byte-for-byte against uncoloured output of the same fixture
+  (mixed-width titles, CJK, emoji) - identical. This repo has shipped a
+  byte-length padding bug before.
+- Broken pipe verified from real shell pipelines on 6- and 600-ticket fixtures
+  (crossing the pipe buffer boundary), and `| true`. A genuine write error,
+  produced with a filled 8 MB disk image, still exits 1.
+- Mutation testing confirmed both fixes discriminating. Note one disclosed
+  limitation: the small-fixture broken-pipe test stays green when the fix is
+  reverted, because a short listing can finish writing before the reader
+  closes. The large-fixture test is the one doing the real work, and the
+  contributor documented this in a code comment rather than hiding it.
+
+**Two findings routed out of scope.**
+
+- Every other command uses `println!`/`print!` and panics on a broken pipe
+  (exit 101). Confirmed pre-existing on `ee88666`, not introduced here. Filed
+  separately.
+- The colour feature was independently implemented twice, on two lineages
+  (`7dc275b` and `f1c7407`), and both reached main. Checked: the colour files
+  are byte-identical between them, main has exactly one `style()` and one
+  `anstyle` dependency, and no duplicated tests. No dead code.
