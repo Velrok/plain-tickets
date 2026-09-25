@@ -86,6 +86,36 @@ create_ticket(dir, title) -> (id, filename)
 depends on a specific status, pass `--status` explicitly rather than
 asserting against the default.
 
+### Bug tickets: reproduce before you fix
+
+**Standing rule, no exceptions.** A ticket of type `bug` starts with a test that
+**reproduces the reported issue and fails for that reason**. You run it, you
+watch it go red, and you record the actual failure output. Only then do you
+touch production code.
+
+Not "a test that covers the area". Not "a test written alongside the fix". The
+red run has to happen first and it has to fail *because of the bug*, not because
+of a typo, a missing fixture or a compile error.
+
+Why it is worth the discipline every time:
+
+- It proves the bug is real and that you have understood it. More than one
+  "bug" here has turned out to already work — `2k12y3` and `9b88c0` were filed
+  as gaps and were largely implemented. A red test is the cheapest way to find
+  that out before writing code nobody needed.
+- It proves the test is discriminating, for free. A test written after the fix
+  has never been observed failing, so nothing rules out its passing vacuously.
+  This is the same property the mutation-testing rule below buys, except here
+  you get it without having to break anything.
+- It pins the *reported* symptom rather than your theory of the cause. `hx1po6`
+  is the cautionary case: its title says the command "hangs", and it does not —
+  it exits 0 and silently omits the tickets. A test written from the title would
+  have asserted termination and passed against the broken code.
+
+Report the red output in your implementation notes, then the green. If the test
+will not go red, stop and say so — the ticket's premise is wrong and that is a
+finding, not an obstacle to work around.
+
 ### Counting the suite
 
 `cargo test` builds ~15 separate test binaries and prints a separate

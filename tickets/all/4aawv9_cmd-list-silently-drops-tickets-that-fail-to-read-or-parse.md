@@ -44,3 +44,27 @@ already had to fix a broken-pipe regression on this exact loop.
 - e2e - an unparseable file, same
 - e2e - stdout stays clean and parseable; the warning is on stderr only
 - e2e - exit code is unchanged
+
+## Reproduce before fixing
+
+This is a `bug` ticket, so the standing rule in `docs/contributor-orientation.md`
+applies: **write a test that reproduces the silent drop and watch it fail first**,
+before touching `src/commands.rs`.
+
+Concretely, the first commit on this ticket should contain only a red test:
+
+- build a fixture dir with two valid tickets and one unreadable file
+  (`chmod 000`), plus a second fixture with one unparseable file
+- run `tickets list` against it
+- assert the valid tickets are listed AND that the failure is reported
+
+Today that test must fail on the second assertion specifically - `list` prints
+the valid rows and says nothing at all about the bad file, exit 0. Record that
+actual output in the implementation notes. If the test goes green as written,
+stop and report it - the premise is wrong.
+
+Only once it is red do you change `cmd_list`.
+
+`fd38vu` is the worked example for the TUI half of this same bug, including the
+`(Vec<Ticket>, Vec<LoadFailure>)` shape. Read its implementation notes before
+starting.
