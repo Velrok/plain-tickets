@@ -88,6 +88,10 @@ pub fn cmd_deps_graph(dir: WorkingDir) -> Result<()> {
     let graph = DepsGraph::build(&dir)?;
     print!("{}", deps_graph::render_forest(&graph));
 
+    if let Some(warning) = deps_graph::format_load_failures(graph.load_failures()) {
+        eprintln!("{warning}");
+    }
+
     let cyclic = graph.cyclic_ids();
     if !cyclic.is_empty() {
         let ids: Vec<String> = cyclic.iter().map(ToString::to_string).collect();
@@ -323,12 +327,26 @@ fn format_load_failures(failures: &[LoadFailure]) -> Option<String> {
 
 pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
     let all_dir = dir.all();
+    // `--unblocked` pulls in `deps_graph`'s own active/archived loader,
+    // which reads `all/` a second time and `archived/` besides. Its
+    // failures are reported here too — the `all/` overlap with
+    // `load_tickets` below is deliberately not deduplicated (each loader
+    // owns its own reporting, per 4aawv9's precedent), but `archived/`
+    // failures are new information this path is the only source of: a
+    // corrupted archived blocker must not vanish silently (o3c87i).
     let unblocked_ctx = args
         .unblocked
         .then(|| -> Result<_> {
-            let active = deps_graph::load_active(&dir)?;
-            let archived = deps_graph::load_archived(&dir)?;
-            Ok((active, archived))
+            let (active, active_failures) = deps_graph::load_active(&dir)?;
+            let (archived, archived_failures) = deps_graph::load_archived(&dir)?;
+            if let Some(warning) = deps_graph::format_load_failures(&active_failures) {
+                eprintln!("{warning}");
+            }
+            if let Some(warning) = deps_graph::format_load_failures(&archived_failures) {
+                eprintln!("{warning}");
+            }
+            let archived_failures_by_id = deps_graph::failures_by_id(&archived_failures);
+            Ok((active, archived, archived_failures_by_id))
         })
         .transpose()?;
 
@@ -343,7 +361,9 @@ pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
         .filter(|t| {
             unblocked_ctx
                 .as_ref()
-                .is_none_or(|(active, archived)| deps_graph::is_unblocked(active, archived, t))
+                .is_none_or(|(active, archived, archived_failures)| {
+                    deps_graph::is_unblocked(active, archived, archived_failures, t)
+                })
         })
         .collect();
 

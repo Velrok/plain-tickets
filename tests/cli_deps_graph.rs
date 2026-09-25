@@ -547,9 +547,8 @@ fn deps_graph_reports_corrupted_archived_blocker_on_stderr() {
 
 #[test]
 fn deps_graph_unreadable_archived_blocker_renders_distinctly_from_missing() {
-    let dir = common::test_dir(
-        "deps_graph_unreadable_archived_blocker_renders_distinctly_from_missing",
-    );
+    let dir =
+        common::test_dir("deps_graph_unreadable_archived_blocker_renders_distinctly_from_missing");
     common::tickets(&dir, &["init"]);
     let blocker = create_todo_ticket(&dir, "Blocker to be corrupted");
     common::tickets(&dir, &["archive", &blocker]);
