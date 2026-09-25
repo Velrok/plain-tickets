@@ -86,6 +86,42 @@ create_ticket(dir, title) -> (id, filename)
 depends on a specific status, pass `--status` explicitly rather than
 asserting against the default.
 
+### Counting the suite
+
+`cargo test` builds ~15 separate test binaries and prints a separate
+`test result: ok. N passed` line for **each**. There is no grand total line.
+Reading one line and calling it the total has already produced a bogus "tests
+have gone missing" scare. Sum them:
+
+```sh
+cargo test 2>&1 | grep -oE '^test result: ok\. [0-9]+' \
+  | grep -oE '[0-9]+' | awk '{s+=$1} END {print s}'
+```
+
+Also count the `test result:` lines — a binary that fails to build or is
+silently skipped is a real defect, and a raw pass count will not show it.
+Always state which commit you measured against; the baseline moves.
+
+### Prove your tests are discriminating
+
+Do this yourself; don't leave it to a reviewer. Once a test is green,
+deliberately break the production code it covers and confirm **that** test goes
+red for the right reason, then restore with `git checkout -- <file>` and
+confirm green again. Report which mutation reddened which test.
+
+This is not ceremony. It is how the real defects in this repo have been caught:
+injecting `return Vec::new()` into `col_indices` reddened three tests;
+reintroducing the byte-length padding bug proved a regression test was
+discriminating. A test that still passes when you break the thing it claims to
+cover is worthless, and a ticket will be failed for shipping one.
+
+It matters most when a ticket turns out to be **test-only** — a test that passes
+against unchanged code proves nothing until you have shown it fails when the
+behaviour is broken.
+
+`cargo insta --check` passing only proves snapshots match *current* output, not
+that the blessed content is *correct*. Eyeball blessed text against the ticket.
+
 ## Traps that have already caught someone
 
 **Date-dependent fixtures.** The suite was permanently red for ~8 weeks
@@ -125,6 +161,26 @@ explicit pathspec **on the `git commit` command itself**, not just on
 **Ticket ids are exact, 6 chars.** Lookup matches the `<id>_` filename
 prefix; a partial id never resolves.
 
+**Don't fix the silent-drop pattern in `cmd_list` in passing.** `filter_map(...) .ok()` at `src/commands.rs:260-261` discards read and parse errors, and a third
+similar loader sits on the deps-graph path. The TUI half of this was fixed in
+`fd38vu`; the CLI half is ticketed as `4aawv9` with a specified stderr-based
+design. It is tempting to clean up while you are in the area — don't, you will
+collide with that ticket.
+
+**Working in a worktree? Your `tickets/` is a stale snapshot.** The tracker
+moves on `main` while you work. Read ticket bodies for context, but treat
+statuses and blocker edges as possibly out of date, and never write to
+`tickets/` from a worktree — the supervisor owns tracker writes, and
+`git.auto_commit = true` means a CLI write there creates a commit on your
+branch.
+
+**Never `git pull` / `git merge` / `git rebase` from a contributor worktree.**
+Branches are cut from **local** `main` deliberately. `origin/main` has diverged
+and carries tickets that never existed locally; pulling it in corrupted `main`
+once. Note also that `git revert` on a bad merge does not remove those commits
+from history — it only negates their content, and the stale lineage then makes a
+later `git pull --rebase` replay onto the wrong base.
+
 ## Observed behaviour worth knowing
 
 From independent verification of `ihqh45`, on the code as it stands:
@@ -151,10 +207,10 @@ This is deliberate, not a bug. Do not "fix" it.
 
 The two answer different questions:
 
-| Command | Question | Active done blocker |
-|---|---|---|
-| `deps-graph` | what is the shape of my active work | stays a node, edge drawn |
-| `list --unblocked` | what can I pick up right now | satisfied, ticket listed |
+| Command            | Question                            | Active done blocker      |
+| ------------------ | ----------------------------------- | ------------------------ |
+| `deps-graph`       | what is the shape of my active work | stays a node, edge drawn |
+| `list --unblocked` | what can I pick up right now        | satisfied, ticket listed |
 
 The epic is consistent with this. It builds the graph from "active tickets
 `blocked_by` edges" with every active ticket a node, and scopes the
