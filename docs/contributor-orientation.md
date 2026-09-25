@@ -136,8 +136,27 @@ Always state which commit you measured against; the baseline moves.
 
 Do this yourself; don't leave it to a reviewer. Once a test is green,
 deliberately break the production code it covers and confirm **that** test goes
-red for the right reason, then restore with `git checkout -- <file>` and
-confirm green again. Report which mutation reddened which test.
+red for the right reason, then restore and confirm green again. Report which
+mutation reddened which test.
+
+**Restore with a file copy, not `git checkout -- <file>`.** `git checkout --`
+discards working-tree changes, so it is a destructive operation that prompts the
+user for permission on every single call — across several mutations and several
+concurrent agents that becomes a flood of prompts for what is really just
+putting a file back.
+
+```sh
+cp src/thing.rs /tmp/thing.rs.orig   # once, before the first mutation
+# ...mutate, run tests, observe the red...
+cp /tmp/thing.rs.orig src/thing.rs   # restore
+```
+
+Keep the backup outside the repo so it is not picked up as an untracked file.
+Confirm the restore with `git status --short` and `git diff --stat`, which are
+read-only and prompt-free — a clean diff is the proof the tree is back at HEAD.
+
+The same reasoning rules out `git stash` for this, on top of the shared-stack
+hazard described below.
 
 This is not ceremony. It is how the real defects in this repo have been caught:
 injecting `return Vec::new()` into `col_indices` reddened three tests;
