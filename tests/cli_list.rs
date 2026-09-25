@@ -962,6 +962,49 @@ fn list_stdout_stays_clean_when_a_file_fails_to_load() {
     assert!(lines[0].contains("Alpha ticket"), "got: {}", lines[0]);
 }
 
+// ── archived load failures leak through the third loader (o3c87i) ──────────
+//
+// `load_tickets`/`format_load_failures` above only cover `all/` — the
+// separate loader backing `--unblocked` (`deps_graph::load_active`/
+// `load_archived`) still drops archived read/parse failures on the floor.
+// A corrupted file in `archived/` named as a blocker vanishes with the
+// dependent correctly held back, but nothing on stderr says why.
+
+#[test]
+fn list_unblocked_reports_corrupted_archived_blocker_on_stderr() {
+    let dir = common::test_dir("list_unblocked_reports_corrupted_archived_blocker_on_stderr");
+    common::tickets(&dir, &["init"]);
+    let (blocker_id, _) = common::create_ticket(&dir, "Blocker to be corrupted");
+    let out = common::tickets(&dir, &["archive", &blocker_id]);
+    assert!(out.status.success(), "archive failed: {:?}", out);
+    let corrupted_filename = common::corrupt_archived_file(&dir, &blocker_id);
+    common::tickets(
+        &dir,
+        &[
+            "new",
+            "--title",
+            "Dependent ticket",
+            "--blocked-by",
+            &blocker_id,
+        ],
+    );
+
+    let out = common::tickets(&dir, &["list", "--unblocked"]);
+    assert!(out.status.success(), "list failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains("Dependent ticket"),
+        "dependent must still be held back: {stdout}"
+    );
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains(&corrupted_filename),
+        "stderr must name the corrupted archived blocker file, got: {stderr:?}"
+    );
+}
+
 #[test]
 fn list_exit_code_unchanged_when_a_file_fails_to_load() {
     let dir = common::test_dir("list_exit_code_unchanged_when_a_file_fails_to_load");

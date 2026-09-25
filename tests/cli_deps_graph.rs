@@ -521,3 +521,52 @@ fn cycle_reachable_from_an_external_root_does_not_crash() {
     assert!(stdout.contains(y.as_str()));
     assert!(stdout.contains("(cycle: see above)"));
 }
+
+// --- o3c87i: a corrupted archived blocker file must not vanish silently ---
+
+#[test]
+fn deps_graph_reports_corrupted_archived_blocker_on_stderr() {
+    let dir = common::test_dir("deps_graph_reports_corrupted_archived_blocker_on_stderr");
+    common::tickets(&dir, &["init"]);
+    let blocker = create_todo_ticket(&dir, "Blocker to be corrupted");
+    let out = common::tickets(&dir, &["archive", &blocker]);
+    assert!(out.status.success(), "archive failed: {:?}", out);
+    let corrupted_filename = common::corrupt_archived_file(&dir, &blocker);
+    let dependent = create_todo_ticket(&dir, "Depends on corrupted archive");
+    common::tickets(&dir, &["edit", &dependent, "--blocked-by", &blocker]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains(&corrupted_filename),
+        "stderr must name the corrupted archived blocker file, got: {stderr:?}"
+    );
+}
+
+#[test]
+fn deps_graph_unreadable_archived_blocker_renders_distinctly_from_missing() {
+    let dir = common::test_dir(
+        "deps_graph_unreadable_archived_blocker_renders_distinctly_from_missing",
+    );
+    common::tickets(&dir, &["init"]);
+    let blocker = create_todo_ticket(&dir, "Blocker to be corrupted");
+    common::tickets(&dir, &["archive", &blocker]);
+    common::corrupt_archived_file(&dir, &blocker);
+    let dependent = create_todo_ticket(&dir, "Depends on corrupted archive");
+    common::tickets(&dir, &["edit", &dependent, "--blocked-by", &blocker]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains(&format!("[missing: {blocker}]")),
+        "a present-but-unreadable blocker must not render as missing: {stdout}"
+    );
+    assert!(
+        stdout.contains(blocker.as_str()),
+        "the unreadable blocker's id should still be named in its stub: {stdout}"
+    );
+}

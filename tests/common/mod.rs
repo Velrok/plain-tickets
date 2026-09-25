@@ -56,3 +56,21 @@ pub fn create_ticket(dir: &Path, title: &str) -> (String, String) {
     let filename = parts.next().unwrap().to_string();
     (id, filename)
 }
+
+/// Overwrites the already-archived ticket `id`'s file under `dir/archived/`
+/// with front matter that will not parse as a `Ticket` — used to reproduce
+/// `o3c87i`: a corrupted file in `archived/` named as a blocker. Returns the
+/// file's name so callers can assert stderr names it.
+#[allow(dead_code)]
+pub fn corrupt_archived_file(dir: &Path, id: &str) -> String {
+    let archived = dir.join("archived");
+    let prefix = format!("{id}_");
+    let entry = fs::read_dir(&archived)
+        .unwrap_or_else(|e| panic!("could not read {}: {e}", archived.display()))
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with(&prefix))
+        .unwrap_or_else(|| panic!("no archived file found with id {id}"));
+    let path = entry.path();
+    fs::write(&path, "---\nstatus: nonsense-status\n---\n").unwrap();
+    entry.file_name().to_string_lossy().into_owned()
+}
