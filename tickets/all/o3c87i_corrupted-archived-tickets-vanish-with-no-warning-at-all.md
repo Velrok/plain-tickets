@@ -4,8 +4,8 @@ title: corrupted archived tickets vanish with no warning at all
 type: bug
 status: todo
 tags:
-- cli
-parent: null
+  - cli
+parent:
 blocked_by: []
 created_at: 2026-09-25T13:34:49.411076Z
 updated_at: 2026-09-25T13:34:49.411076Z
@@ -22,9 +22,11 @@ Reproduced during independent verification of `4aawv9` on 2026-09-25.
 
 Corrupt an **archived** ticket that is named as a blocker, then
 
-    $ tickets list --unblocked
-    (no stdout, the dependent is correctly excluded)
-    (stderr completely empty, no warning at all)
+```
+$ tickets list --unblocked
+(no stdout, the dependent is correctly excluded)
+(stderr completely empty, no warning at all)
+```
 
 The dependent is correctly held back - its blocker cannot be verified as
 satisfied - but the user is told nothing whatsoever about why, and the archived
@@ -55,12 +57,12 @@ applies: **write the failing test first** and commit it on its own.
 ## Shape of the fix
 
 Do NOT add a fourth copy of the load-and-warn logic. There are already three
-near-identical ticket-loading paths and `4z8qct` exists to collapse them. Either
+near-identical ticket-loading paths and `peoza2` exists to collapse them. Either
 land that extraction first and build on it, or write this fix so it is trivially
 absorbed by it.
 
 Note `load_dir` returns `HashMap<TicketId, Ticket>` rather than a `Vec`, so it
-is not a drop-in for the other two - that difference is part of what `4z8qct`
+is not a drop-in for the other two - that difference is part of what `peoza2`
 has to reconcile.
 
 Also settle what `deps-graph` should render for a blocker whose file exists but
@@ -70,5 +72,5 @@ silently treating it as `Missing` would be wrong.
 
 ## Related
 
-`fd38vu`, `4aawv9` (the first two loaders), `4z8qct` (the extraction),
+`fd38vu`, `4aawv9` (the first two loaders), `peoza2` (the extraction),
 `bmtthv` (architecture review, where duplicated loading is finding #1).
