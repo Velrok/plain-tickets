@@ -88,7 +88,8 @@ fn blocker_archived_and_done_never_appears_as_a_node_or_label() {
     );
 }
 
-// --- 2k12y3: fan-out renders siblings ordered by created_at, not id. ---
+// --- 2k12y3 / 9b88c0: fan-out ordering and disjoint chains as separate
+// roots. ---
 
 /// Find the ticket file for `id` under `dir/all` and overwrite its
 /// `created_at` front-matter value. Used to force a created_at ordering
@@ -165,4 +166,39 @@ fn fan_out_renders_siblings_ordered_by_created_at_not_id() {
         stdout.contains(&format!("└── {later_id}")),
         "expected later sibling to use last connector: {stdout}"
     );
+}
+
+#[test]
+fn disjoint_chains_render_as_two_roots_with_no_connecting_lines() {
+    let dir = common::test_dir("deps_graph_disjoint_chains_render_as_two_roots");
+    common::tickets(&dir, &["init"]);
+    let root_a = create_todo_ticket(&dir, "Chain1 Root");
+    let leaf_a = create_todo_ticket(&dir, "Chain1 Leaf");
+    let root_b = create_todo_ticket(&dir, "Chain2 Root");
+    let leaf_b = create_todo_ticket(&dir, "Chain2 Leaf");
+    common::tickets(&dir, &["edit", &leaf_a, "--blocked-by", &root_a]);
+    common::tickets(&dir, &["edit", &leaf_b, "--blocked-by", &root_b]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    let expected = format!(
+        "{root_a}  todo  Chain1 Root\n└── {leaf_a}  todo  Chain1 Leaf\n\
+         {root_b}  todo  Chain2 Root\n└── {leaf_b}  todo  Chain2 Leaf\n"
+    );
+    assert_eq!(stdout, expected);
+}
+
+#[test]
+fn orphan_ticket_renders_as_a_lone_root_line() {
+    let dir = common::test_dir("deps_graph_orphan_renders_as_lone_root_line");
+    common::tickets(&dir, &["init"]);
+    let orphan = create_todo_ticket(&dir, "Lone");
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert_eq!(stdout, format!("{orphan}  todo  Lone\n"));
 }
