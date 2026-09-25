@@ -2,14 +2,14 @@
 id: chphvf
 title: list shows an emoji for each ticket type
 type: task
-status: review
+status: done
 tags:
 - list
 - ux
 parent: null
 blocked_by: []
 created_at: 2026-09-23T11:12:26.120717Z
-updated_at: 2026-09-23T11:26:31.855916Z
+updated_at: 2026-09-25T11:38:32.058872Z
 ---
 
 ## Behaviour
