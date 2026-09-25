@@ -88,8 +88,8 @@ fn blocker_archived_and_done_never_appears_as_a_node_or_label() {
     );
 }
 
-// --- 2k12y3 / 9b88c0 / 3yew0k: fan-out ordering, disjoint chains, and
-// repeated multi-blocker tickets. ---
+// --- 2k12y3 / 9b88c0 / 3yew0k / hx1po6: fan-out ordering, disjoint chains,
+// repeated multi-blocker tickets, and cycle handling. ---
 
 /// Find the ticket file for `id` under `dir/all` and overwrite its
 /// `created_at` front-matter value. Used to force a created_at ordering
@@ -284,4 +284,101 @@ fn nested_diamonds_two_converging_pairs_feed_one_final_ticket() {
         2,
         "n should appear twice: {stdout}"
     );
+}
+
+#[test]
+fn three_ticket_cycle_renders_every_id_without_hanging() {
+    let dir = common::test_dir("deps_graph_three_ticket_cycle_renders_without_hanging");
+    common::tickets(&dir, &["init"]);
+    let a = create_todo_ticket(&dir, "A");
+    let b = create_todo_ticket(&dir, "B");
+    let c = create_todo_ticket(&dir, "C");
+    common::tickets(&dir, &["edit", &a, "--blocked-by", &c]);
+    common::tickets(&dir, &["edit", &b, "--blocked-by", &a]);
+    common::tickets(&dir, &["edit", &c, "--blocked-by", &b]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+    assert_eq!(out.status.code(), Some(0));
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    for id in [&a, &b, &c] {
+        assert!(
+            stdout.contains(id.as_str()),
+            "expected cycle member {id} to appear in output: {stdout}"
+        );
+    }
+    assert!(
+        stdout.contains("(cycle: see above)"),
+        "expected a cycle marker: {stdout}"
+    );
+}
+
+#[test]
+fn cycle_warning_names_every_id_on_stderr_with_exit_zero() {
+    let dir = common::test_dir("deps_graph_cycle_warning_names_every_id_on_stderr");
+    common::tickets(&dir, &["init"]);
+    let a = create_todo_ticket(&dir, "A");
+    let b = create_todo_ticket(&dir, "B");
+    common::tickets(&dir, &["edit", &a, "--blocked-by", &b]);
+    common::tickets(&dir, &["edit", &b, "--blocked-by", &a]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert_eq!(out.status.code(), Some(0));
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains(a.as_str()) && stderr.contains(b.as_str()),
+        "expected both cycle ids named on stderr: {stderr}"
+    );
+}
+
+#[test]
+fn pure_two_ticket_cycle_with_no_root_still_renders_both() {
+    let dir = common::test_dir("deps_graph_pure_two_ticket_cycle_renders_both");
+    common::tickets(&dir, &["init"]);
+    let a = create_todo_ticket(&dir, "A");
+    let b = create_todo_ticket(&dir, "B");
+    common::tickets(&dir, &["edit", &a, "--blocked-by", &b]);
+    common::tickets(&dir, &["edit", &b, "--blocked-by", &a]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(
+        !stdout.is_empty(),
+        "cycle members must not be silently omitted"
+    );
+    assert!(
+        stdout.contains(a.as_str()),
+        "expected {a} in output: {stdout}"
+    );
+    assert!(
+        stdout.contains(b.as_str()),
+        "expected {b} in output: {stdout}"
+    );
+}
+
+#[test]
+fn cycle_reachable_from_an_external_root_does_not_crash() {
+    let dir = common::test_dir("deps_graph_cycle_reachable_from_external_root_does_not_crash");
+    common::tickets(&dir, &["init"]);
+    let root = create_todo_ticket(&dir, "Root");
+    let x = create_todo_ticket(&dir, "X");
+    let y = create_todo_ticket(&dir, "Y");
+    common::tickets(
+        &dir,
+        &["edit", &x, "--blocked-by", &root, "--blocked-by", &y],
+    );
+    common::tickets(&dir, &["edit", &y, "--blocked-by", &x]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(stdout.contains(root.as_str()));
+    assert!(stdout.contains(x.as_str()));
+    assert!(stdout.contains(y.as_str()));
+    assert!(stdout.contains("(cycle: see above)"));
 }

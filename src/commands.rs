@@ -87,6 +87,15 @@ pub fn cmd_graph(dir: WorkingDir, id: Option<TicketId>) -> Result<()> {
 pub fn cmd_deps_graph(dir: WorkingDir) -> Result<()> {
     let graph = DepsGraph::build(&dir)?;
     print!("{}", deps_graph::render_forest(&graph));
+
+    let cyclic = graph.cyclic_ids();
+    if !cyclic.is_empty() {
+        let ids: Vec<String> = cyclic.iter().map(ToString::to_string).collect();
+        eprintln!(
+            "warning: dependency cycle detected among: {}",
+            ids.join(", ")
+        );
+    }
     Ok(())
 }
 
