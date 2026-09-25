@@ -18,11 +18,13 @@ use crate::domain_types::{Ticket, TicketId, TicketStatus};
 /// How a single `blocked_by` id resolves, against the active ticket set
 /// first and then, on a miss, one fallback lookup in `archived/`.
 ///
-/// This is the single seam widened by 7se1mu, xptucc and (still to come)
-/// t9p76e. `list --unblocked` (3p7tpt/rm49xa) already calls
-/// [`resolve_blocker`] via [`is_unblocked`], so the archived fallback is
-/// shared with it for free — extend `resolve_blocker` and
-/// `blocker_satisfied` rather than reimplementing the rule.
+/// This is the single seam widened by 7se1mu, xptucc and t9p76e.
+/// `resolve_blocker` is total — every id lands in exactly one variant, so
+/// there is no "not yet resolved" case left to model as `None`. `list
+/// --unblocked` (3p7tpt/rm49xa) already calls [`resolve_blocker`] via
+/// [`is_unblocked`], so the archived and missing fallbacks are shared with
+/// it for free — extend `resolve_blocker` and `blocker_satisfied` rather
+/// than reimplementing the rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum BlockerResolution {
     /// Blocker is an active ticket — render an edge into it regardless of
@@ -36,31 +38,36 @@ enum BlockerResolution {
     /// (e.g. `rejected`) — NOT satisfied. Renders as a distinct stub root
     /// naming both the id and its status (xptucc).
     ArchivedStub(TicketId, TicketStatus),
+    /// Blocker isn't active and isn't in the archive either — a data
+    /// problem (bad id/typo), not an intentional filter. NOT satisfied.
+    /// Renders as a distinct stub root naming the id (t9p76e).
+    Missing(TicketId),
 }
 
 /// Resolve a single `blocked_by` id: active tickets always resolve
 /// (`Active`, any status); otherwise fall back to one lookup in the
-/// archived set, which resolves (`ArchivedDone`) when that archived
+/// archived set. An archived hit resolves to `ArchivedDone` only when that
 /// ticket's status is `done` — never a negation of the other statuses, so
 /// this keeps resolving correctly as `TicketStatus` grows new variants —
-/// and resolves (`ArchivedStub`) for any other status. `None` when the id
-/// isn't found anywhere (missing/typo would-be id) — still to be widened
-/// into its own variant by t9p76e.
+/// and to `ArchivedStub` for any other status. No hit anywhere resolves to
+/// `Missing`. Total: every id lands in exactly one variant.
 fn resolve_blocker(
     active: &HashMap<TicketId, Ticket>,
     archived: &HashMap<TicketId, Ticket>,
     id: &TicketId,
-) -> Option<BlockerResolution> {
+) -> BlockerResolution {
     if active.contains_key(id) {
-        return Some(BlockerResolution::Active(id.clone()));
+        return BlockerResolution::Active(id.clone());
     }
-    archived.get(id).map(|ticket| {
-        if ticket.front_matter.status == TicketStatus::Done {
+    match archived.get(id) {
+        Some(ticket) if ticket.front_matter.status == TicketStatus::Done => {
             BlockerResolution::ArchivedDone(id.clone())
-        } else {
+        }
+        Some(ticket) => {
             BlockerResolution::ArchivedStub(id.clone(), ticket.front_matter.status.clone())
         }
-    })
+        None => BlockerResolution::Missing(id.clone()),
+    }
 }
 
 /// Whether a resolved blocker counts as satisfied — i.e. no longer blocks
@@ -68,8 +75,8 @@ fn resolve_blocker(
 /// `Active` arm is deliberately not an exhaustive match on `TicketStatus` —
 /// it's a positive equality check, so a newly added status (e.g. `review`)
 /// keeps blocking by default rather than needing this to be touched.
-/// `ArchivedStub` is always unsatisfied — the dependency stays and is
-/// rendered as a stub instead.
+/// `ArchivedStub` and `Missing` are both always unsatisfied — the dependency
+/// stays and is rendered as a stub instead.
 fn blocker_satisfied(active: &HashMap<TicketId, Ticket>, resolution: &BlockerResolution) -> bool {
     match resolution {
         BlockerResolution::Active(id) => active[id].front_matter.status == TicketStatus::Done,
@@ -78,6 +85,7 @@ fn blocker_satisfied(active: &HashMap<TicketId, Ticket>, resolution: &BlockerRes
         // `done`.
         BlockerResolution::ArchivedDone(_) => true,
         BlockerResolution::ArchivedStub(_, _) => false,
+        BlockerResolution::Missing(_) => false,
     }
 }
 
@@ -90,10 +98,11 @@ pub(crate) fn is_unblocked(
     archived: &HashMap<TicketId, Ticket>,
     ticket: &Ticket,
 ) -> bool {
-    ticket.front_matter.blocked_by.iter().all(|blocker_id| {
-        resolve_blocker(active, archived, blocker_id)
-            .is_some_and(|resolution| blocker_satisfied(active, &resolution))
-    })
+    ticket
+        .front_matter
+        .blocked_by
+        .iter()
+        .all(|blocker_id| blocker_satisfied(active, &resolve_blocker(active, archived, blocker_id)))
 }
 
 /// How a stub node (an out-of-active-set blocker that does not satisfy the
@@ -104,13 +113,17 @@ enum StubKind {
     /// Found archived, but not `done` (xptucc). Carries the status so the
     /// stub can name it.
     Archived(TicketStatus),
+    /// Not found anywhere (t9p76e).
+    Missing,
 }
 
 impl StubKind {
-    /// Render the stub root line for `id`.
+    /// Render the stub root line for `id`. The two forms are deliberately
+    /// visually distinct from each other and from a normal ticket line.
     fn label(&self, id: &TicketId) -> String {
         match self {
             StubKind::Archived(status) => format!("[archived: {id} {status}]"),
+            StubKind::Missing => format!("[missing: {id}]"),
         }
     }
 }
@@ -119,9 +132,9 @@ impl StubKind {
 /// out-of-active-set blocker that does not satisfy its dependency (a
 /// "stub" — see [`StubKind`]), and one edge per unsatisfied `blocked_by`
 /// relationship, directed blocker -> dependent. Stub nodes let an
-/// unsatisfied archived blocker render as a root naming itself, with the
-/// dependent nested underneath — the same "nest under every blocker" shape
-/// used for real diamonds.
+/// unsatisfied archived/missing blocker render as a root naming itself,
+/// with the dependent nested underneath — the same "nest under every
+/// blocker" shape used for real diamonds.
 pub struct DepsGraph {
     graph: DiGraph<TicketId, ()>,
     index_of: HashMap<TicketId, NodeIndex>,
@@ -144,8 +157,8 @@ impl DepsGraph {
     /// Construct from a pre-loaded active map, resolving `blocked_by`
     /// against `active` and then, on a miss, `archived`. Archived tickets
     /// are never added as full nodes — only active tickets are — but an
-    /// unsatisfied out-of-active-set blocker (archived non-done) gets a
-    /// stub node so it renders as a root naming itself.
+    /// unsatisfied out-of-active-set blocker (archived non-done, or found
+    /// nowhere) gets a stub node so it renders as a root naming itself.
     fn from_maps(active: HashMap<TicketId, Ticket>, archived: &HashMap<TicketId, Ticket>) -> Self {
         let mut graph = DiGraph::new();
         let mut index_of = HashMap::new();
@@ -156,13 +169,13 @@ impl DepsGraph {
         for (id, ticket) in &active {
             for blocker in &ticket.front_matter.blocked_by {
                 match resolve_blocker(&active, archived, blocker) {
-                    Some(BlockerResolution::Active(blocker_id)) => {
+                    BlockerResolution::Active(blocker_id) => {
                         let from = index_of[&blocker_id];
                         let to = index_of[id];
                         graph.add_edge(from, to, ());
                     }
-                    Some(BlockerResolution::ArchivedDone(_)) => {}
-                    Some(BlockerResolution::ArchivedStub(blocker_id, status)) => {
+                    BlockerResolution::ArchivedDone(_) => {}
+                    BlockerResolution::ArchivedStub(blocker_id, status) => {
                         let from = *index_of
                             .entry(blocker_id.clone())
                             .or_insert_with(|| graph.add_node(blocker_id.clone()));
@@ -170,7 +183,14 @@ impl DepsGraph {
                         let to = index_of[id];
                         graph.add_edge(from, to, ());
                     }
-                    None => {}
+                    BlockerResolution::Missing(blocker_id) => {
+                        let from = *index_of
+                            .entry(blocker_id.clone())
+                            .or_insert_with(|| graph.add_node(blocker_id.clone()));
+                        stubs.insert(blocker_id, StubKind::Missing);
+                        let to = index_of[id];
+                        graph.add_edge(from, to, ());
+                    }
                 }
             }
         }
@@ -348,7 +368,7 @@ mod resolve_blocker_tests {
 
         let resolution = resolve_blocker(&active, &archived, &id("a"));
 
-        assert_eq!(resolution, Some(BlockerResolution::Active(id("a"))));
+        assert_eq!(resolution, BlockerResolution::Active(id("a")));
     }
 
     #[test]
@@ -360,7 +380,7 @@ mod resolve_blocker_tests {
 
         let resolution = resolve_blocker(&active, &archived, &id("a"));
 
-        assert_eq!(resolution, Some(BlockerResolution::ArchivedDone(id("a"))));
+        assert_eq!(resolution, BlockerResolution::ArchivedDone(id("a")));
     }
 
     #[test]
@@ -375,21 +395,18 @@ mod resolve_blocker_tests {
 
         assert_eq!(
             resolution,
-            Some(BlockerResolution::ArchivedStub(
-                id("a"),
-                TicketStatus::Rejected
-            ))
+            BlockerResolution::ArchivedStub(id("a"), TicketStatus::Rejected)
         );
     }
 
     #[test]
-    fn blocker_missing_everywhere_is_not_resolved() {
+    fn blocker_missing_everywhere_resolves_missing() {
         let active = HashMap::new();
         let archived = HashMap::new();
 
         let resolution = resolve_blocker(&active, &archived, &id("a"));
 
-        assert_eq!(resolution, None);
+        assert_eq!(resolution, BlockerResolution::Missing(id("a")));
     }
 
     #[test]
@@ -404,6 +421,14 @@ mod resolve_blocker_tests {
     fn blocker_satisfied_treats_archived_stub_as_unsatisfied() {
         let active = HashMap::new();
         let resolution = BlockerResolution::ArchivedStub(id("a"), TicketStatus::Rejected);
+
+        assert!(!blocker_satisfied(&active, &resolution));
+    }
+
+    #[test]
+    fn blocker_satisfied_treats_missing_as_unsatisfied() {
+        let active = HashMap::new();
+        let resolution = BlockerResolution::Missing(id("a"));
 
         assert!(!blocker_satisfied(&active, &resolution));
     }
@@ -430,6 +455,16 @@ mod resolve_blocker_tests {
         )]
         .into_iter()
         .collect();
+        let mut dependent = make_ticket("dependent", TicketStatus::Todo);
+        dependent.front_matter.blocked_by = vec![id("blocker")];
+
+        assert!(!is_unblocked(&active, &archived, &dependent));
+    }
+
+    #[test]
+    fn is_unblocked_false_when_only_blocker_is_missing() {
+        let active = HashMap::new();
+        let archived = HashMap::new();
         let mut dependent = make_ticket("dependent", TicketStatus::Todo);
         dependent.front_matter.blocked_by = vec![id("blocker")];
 
