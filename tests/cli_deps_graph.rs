@@ -87,3 +87,82 @@ fn blocker_archived_and_done_never_appears_as_a_node_or_label() {
         "archived done blocker title must not appear anywhere: {stdout}"
     );
 }
+
+// --- 2k12y3: fan-out renders siblings ordered by created_at, not id. ---
+
+/// Find the ticket file for `id` under `dir/all` and overwrite its
+/// `created_at` front-matter value. Used to force a created_at ordering
+/// that disagrees with id ordering — there is no CLI subcommand for
+/// backdating a ticket, so this is a direct file edit, test-only.
+fn set_created_at(dir: &Path, id: &str, rfc3339: &str) {
+    let entry = std::fs::read_dir(dir.join("all"))
+        .unwrap()
+        .flatten()
+        .find(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .starts_with(&format!("{id}_"))
+        })
+        .unwrap_or_else(|| panic!("no ticket file found for {id}"));
+    let path = entry.path();
+    let contents = std::fs::read_to_string(&path).unwrap();
+    let updated: String = contents
+        .lines()
+        .map(|line| {
+            if line.starts_with("created_at:") {
+                format!("created_at: {rfc3339}")
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    std::fs::write(&path, updated).unwrap();
+}
+
+#[test]
+fn fan_out_renders_siblings_ordered_by_created_at_not_id() {
+    let dir = common::test_dir("deps_graph_fan_out_ordered_by_created_at_not_id");
+    common::tickets(&dir, &["init"]);
+    let root = create_todo_ticket(&dir, "Ship shared auth lib");
+    let first_created = create_todo_ticket(&dir, "Add login screen");
+    let second_created = create_todo_ticket(&dir, "Add SSO integration");
+    common::tickets(&dir, &["edit", &first_created, "--blocked-by", &root]);
+    common::tickets(&dir, &["edit", &second_created, "--blocked-by", &root]);
+
+    // Force id ordering to disagree with created_at ordering: whichever of
+    // the two ids sorts first alphabetically gets the *later* created_at,
+    // so a render that (wrongly) sorted by id would put the children in
+    // the opposite order to a render that correctly sorts by created_at.
+    let (alphabetically_first, alphabetically_second) = if first_created < second_created {
+        (first_created.clone(), second_created.clone())
+    } else {
+        (second_created.clone(), first_created.clone())
+    };
+    let earlier_id = alphabetically_second;
+    let later_id = alphabetically_first;
+    set_created_at(&dir, &earlier_id, "2026-01-01T00:00:00Z");
+    set_created_at(&dir, &later_id, "2026-06-01T00:00:00Z");
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    let earlier_pos = stdout.find(&earlier_id).expect("earlier id in output");
+    let later_pos = stdout.find(&later_id).expect("later id in output");
+    assert!(
+        earlier_pos < later_pos,
+        "expected id with earlier created_at ({earlier_id}) to render before \
+         the id with later created_at ({later_id}), which is alphabetically \
+         earlier: {stdout}"
+    );
+    assert!(
+        stdout.contains(&format!("├── {earlier_id}")),
+        "expected earlier sibling to use non-last connector: {stdout}"
+    );
+    assert!(
+        stdout.contains(&format!("└── {later_id}")),
+        "expected later sibling to use last connector: {stdout}"
+    );
+}
