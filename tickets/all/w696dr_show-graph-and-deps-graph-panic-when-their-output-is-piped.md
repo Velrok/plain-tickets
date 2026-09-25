@@ -2,13 +2,13 @@
 id: w696dr
 title: show graph and deps-graph panic when their output is piped
 type: bug
-status: todo
+status: in-progress
 tags:
 - cli
 parent: null
 blocked_by: []
 created_at: 2026-09-25T12:38:10.471312Z
-updated_at: 2026-09-25T12:38:10.471312Z
+updated_at: 2026-09-25T14:11:29.908572Z
 ---
 
 ## Behaviour
