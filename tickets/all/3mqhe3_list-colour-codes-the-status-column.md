@@ -10,8 +10,9 @@ parent: null
 blocked_by:
 - chphvf
 created_at: 2026-09-23T11:12:47.313368Z
-updated_at: 2026-09-25T11:43:55.675482Z
+updated_at: 2026-09-25T12:05:41.226261Z
 ---
+
 
 ## Behaviour
 
@@ -92,3 +93,52 @@ by column position in the uncoloured path rather than by whole-line compare.
 style with an explicit arm per variant and **no wildcard `_ =>` arm**, so the
 next status addition fails to compile rather than silently rendering
 uncoloured. That is the convention the rest of the codebase already follows.
+
+## Implementation notes (2026-09-25), commit `f1c7407`
+
+Landed on worktree branch `ticket-3mqhe3`, merged to `main`. Awaiting
+independent verification — not yet `done`.
+
+**Dependencies:** added `anstream` and `anstyle` as *direct* dependencies.
+Confirmed via `cargo tree -i` that both were already present transitively
+via clap, so `Cargo.lock` gained only the two top-level entries and pulled
+no new versions.
+
+**Colour mapping:** `TicketStatus::style() -> Option<anstyle::Style>` in
+`src/domain_types.rs`, one explicit arm per variant with no wildcard, so
+adding a status fails to compile rather than silently rendering plain.
+`done` → green, `rejected` → bright black (grey), `in-progress` → yellow,
+`review` → magenta (purple), `draft`/`todo` → `None`.
+
+**The padding trap, handled:** the status cell is padded with the existing
+`pad_to_display_width` *first*, then wrapped in the style. ANSI escapes are
+zero-display-width, so colouring before padding would have corrupted the
+column alignment `chphvf` established.
+
+**Pipe safety:** rows go through `anstream::stdout()`, whose `AutoStream`
+inspects `NO_COLOR` / `CLICOLOR_FORCE` / TTY and strips escapes when not
+appropriate. The required precedence (`NO_COLOR` beats `CLICOLOR_FORCE`) was
+confirmed by reading anstream's own `choice()` rather than assumed.
+
+**Verified against the real binary:** `list | cat -v` → zero `^[` escapes,
+columns aligned; `CLICOLOR_FORCE=1 ... | cat -v` → `^[[33m`/`^[[35m`/
+`^[[32m`/`^[[90m` on in-progress/review/done/rejected, `draft`/`todo`
+untouched; `NO_COLOR=1 CLICOLOR_FORCE=1 ...` → no escapes.
+
+**Tests:** unit `ticket_status_style_maps_every_variant` (exhaustive over all
+six variants), plus six e2e in `tests/cli_list.rs` covering no-ANSI-when-
+piped, byte-identical default output, `NO_COLOR` suppression, forced-colour
+mapping, `draft`/`todo` staying plain, and title-column alignment by
+position across coloured and uncoloured rows. New `common::tickets_with_envs`
+helper added without changing the existing helper's signature.
+`chphvf`'s `list_widest_type_column_has_no_wasted_padding` untouched and
+still passing. `cargo test` 252 passed / 0 failed on the branch; 257 after
+merge to `main`.
+
+**Judgement call:** the ticket's "piped output is byte-identical to the
+current output" criterion cannot literally diff against a pre-change binary
+in an e2e test, so it was implemented as an exact hand-built expected-string
+comparison of the default path — stronger than a self-comparison.
+
+**Out of scope, unchanged:** `tickets show` still emits ANSI into a pipe via
+`bat --color=auto`. That is a separate pre-existing wart.
