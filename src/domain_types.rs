@@ -59,6 +59,33 @@ pub enum TicketStatus {
     Rejected,
 }
 
+impl TicketStatus {
+    /// Colour this status should render as in `list`, or `None` for the two
+    /// resting states (`draft`, `todo`) that stay uncoloured by design.
+    ///
+    /// One explicit arm per variant, no wildcard `_ =>` — a future status
+    /// addition must fail to compile here rather than silently rendering
+    /// plain. See ticket 3mqhe3 for the settled colour map.
+    pub fn style(&self) -> Option<anstyle::Style> {
+        match self {
+            TicketStatus::Draft => None,
+            TicketStatus::Todo => None,
+            TicketStatus::InProgress => {
+                Some(anstyle::Style::new().fg_color(Some(anstyle::AnsiColor::Yellow.into())))
+            }
+            TicketStatus::Review => {
+                Some(anstyle::Style::new().fg_color(Some(anstyle::AnsiColor::Magenta.into())))
+            }
+            TicketStatus::Done => {
+                Some(anstyle::Style::new().fg_color(Some(anstyle::AnsiColor::Green.into())))
+            }
+            TicketStatus::Rejected => {
+                Some(anstyle::Style::new().fg_color(Some(anstyle::AnsiColor::BrightBlack.into())))
+            }
+        }
+    }
+}
+
 impl std::fmt::Display for TicketStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
@@ -219,6 +246,34 @@ mod tests {
             unique.len(),
             emojis.len(),
             "expected distinct emoji per type"
+        );
+    }
+
+    // ── TicketStatus::style ──────────────────────────────────────────────────
+
+    #[test]
+    fn ticket_status_style_maps_every_variant() {
+        // One explicit case per variant, matching the settled colour map in
+        // ticket 3mqhe3. `draft` and `todo` are deliberately `None` — the
+        // resting states stay uncoloured so the four active/terminal
+        // statuses stand out.
+        assert_eq!(TicketStatus::Draft.style(), None);
+        assert_eq!(TicketStatus::Todo.style(), None);
+        assert_eq!(
+            TicketStatus::InProgress.style(),
+            Some(anstyle::Style::new().fg_color(Some(anstyle::AnsiColor::Yellow.into())))
+        );
+        assert_eq!(
+            TicketStatus::Review.style(),
+            Some(anstyle::Style::new().fg_color(Some(anstyle::AnsiColor::Magenta.into())))
+        );
+        assert_eq!(
+            TicketStatus::Done.style(),
+            Some(anstyle::Style::new().fg_color(Some(anstyle::AnsiColor::Green.into())))
+        );
+        assert_eq!(
+            TicketStatus::Rejected.style(),
+            Some(anstyle::Style::new().fg_color(Some(anstyle::AnsiColor::BrightBlack.into())))
         );
     }
 
