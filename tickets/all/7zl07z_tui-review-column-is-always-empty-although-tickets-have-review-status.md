@@ -2,13 +2,13 @@
 id: 7zl07z
 title: TUI review column is always empty although tickets have review status
 type: bug
-status: review
+status: done
 tags:
 - tui
 parent: null
 blocked_by: []
 created_at: 2026-09-23T11:25:38.715322Z
-updated_at: 2026-09-24T16:21:40.382393Z
+updated_at: 2026-09-25T11:45:12.033053Z
 ---
 
 ## Symptom
