@@ -2,13 +2,13 @@
 id: o3c87i
 title: corrupted archived tickets vanish with no warning at all
 type: bug
-status: todo
+status: in-progress
 tags:
-  - cli
-parent:
+- cli
+parent: null
 blocked_by: []
 created_at: 2026-09-25T13:34:49.411076Z
-updated_at: 2026-09-25T13:34:49.411076Z
+updated_at: 2026-09-25T14:04:01.416769Z
 ---
 
 ## Behaviour
