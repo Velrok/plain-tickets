@@ -189,6 +189,12 @@ fn draw_detail(f: &mut Frame, app: &App) {
         // Keep as many body lines as fit once the marker's own rows are
         // reserved. The marker's height depends on the count it reports, so
         // it is measured inside the loop rather than assumed to be one row.
+        //
+        // Degenerate sizes are deliberately out of scope: when the header
+        // alone fills the box (roughly under 11 rows at 80 columns), no row
+        // remains for the marker and it is clipped, so the body is cut with
+        // no indication. Accepted rather than fixed, on the same grounds as
+        // the help overlay's sub-13-row tier — see ticket 4x7e81.
         let mut used = header_rows;
         let mut shown = 0;
         for (i, rows) in body_rows.iter().enumerate() {
