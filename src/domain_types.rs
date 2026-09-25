@@ -100,7 +100,7 @@ impl std::fmt::Display for TicketStatus {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 #[serde(transparent)]
 pub struct TicketId(String);
 
@@ -113,9 +113,22 @@ impl std::fmt::Display for TicketId {
 }
 
 impl std::str::FromStr for TicketId {
-    type Err = std::convert::Infallible;
+    type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.is_empty() {
+            return Err("ticket id must not be empty".to_string());
+        }
         Ok(TicketId(s.to_string()))
+    }
+}
+
+impl<'de> Deserialize<'de> for TicketId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
     }
 }
 
@@ -125,7 +138,7 @@ impl From<String> for TicketId {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct Title(String);
 
@@ -163,6 +176,16 @@ impl std::fmt::Display for Title {
     }
 }
 
+impl<'de> Deserialize<'de> for Title {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
 impl Title {
     pub fn slugify(&self) -> String {
         self.0
@@ -186,7 +209,7 @@ impl Title {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct Tag(String);
 
@@ -212,6 +235,16 @@ impl std::str::FromStr for Tag {
 impl std::fmt::Display for Tag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+impl<'de> Deserialize<'de> for Tag {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
     }
 }
 
