@@ -204,6 +204,45 @@ fn orphan_ticket_renders_as_a_lone_root_line() {
 }
 
 #[test]
+fn root_selection_excludes_tickets_with_an_incoming_blocker_edge() {
+    let dir = common::test_dir("deps_graph_root_selection_excludes_blocked_tickets");
+    common::tickets(&dir, &["init"]);
+    let root = create_todo_ticket(&dir, "Root");
+    let leaf = create_todo_ticket(&dir, "Leaf");
+    common::tickets(&dir, &["edit", &leaf, "--blocked-by", &root]);
+
+    // Force the leaf's created_at earlier than its own blocker's. A roots()
+    // that (wrongly) treats every node as a root -- rather than only
+    // zero-incoming-edge nodes -- would sort the leaf ahead of its root and
+    // hand it out as a top-level entry before the real root ever gets a
+    // chance to nest it underneath. This is deliberately independent of the
+    // rendered-set dedup added later (3yew0k/hx1po6): correct root
+    // selection must never place a blocked ticket at column 0, regardless
+    // of created_at, purely because it has an incoming blocker edge.
+    set_created_at(&dir, &leaf, "2020-01-01T00:00:00Z");
+    set_created_at(&dir, &root, "2020-06-01T00:00:00Z");
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    // Top-level (column 0) lines are the ones with no leading indentation
+    // or tree-drawing connector — i.e. actual roots.
+    let top_level_lines: Vec<&str> = stdout
+        .lines()
+        .filter(|line| !line.starts_with(' ') && !line.starts_with('├') && !line.starts_with('└'))
+        .collect();
+
+    let expected_root_line = format!("{root}  todo  Root");
+    assert_eq!(
+        top_level_lines,
+        vec![expected_root_line.as_str()],
+        "the blocked leaf must never appear as a top-level entry, regardless \
+         of created_at: {stdout}"
+    );
+}
+
+#[test]
 fn diamond_renders_shared_ticket_under_both_blockers() {
     let dir = common::test_dir("deps_graph_diamond_renders_shared_ticket_under_both_blockers");
     common::tickets(&dir, &["init"]);
