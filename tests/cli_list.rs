@@ -1,5 +1,7 @@
 mod common;
 
+use std::process::{Command, Stdio};
+
 #[test]
 fn list_filter_status_returns_matching_only() {
     let dir = common::test_dir("list_filter_status_returns_matching_only");
@@ -773,4 +775,79 @@ fn strip_ansi(s: &str) -> String {
         out.push(c);
     }
     out
+}
+
+// ── broken pipe ──────────────────────────────────────────────────────────
+
+/// Pipe `tickets list`'s stdout into `head -n1`, which reads one line then
+/// closes its end of the pipe. Returns `list`'s exit status and stderr.
+fn list_piped_into_head_one(dir: &std::path::Path) -> (std::process::ExitStatus, String) {
+    let mut list = Command::new(common::bin())
+        .args(["list"])
+        .env("TICKETS_DIR", dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn tickets list");
+
+    let list_stdout = list.stdout.take().expect("list stdout piped");
+    let mut head = Command::new("head")
+        .args(["-n1"])
+        .stdin(Stdio::from(list_stdout))
+        .stdout(Stdio::null())
+        .spawn()
+        .expect("failed to spawn head");
+
+    head.wait().expect("head did not run");
+    let output = list.wait_with_output().expect("list did not run");
+    (
+        output.status,
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn list_piped_into_head_exits_cleanly_with_no_stderr() {
+    // `tickets list | head -1` is exactly the pattern the ticket calls out —
+    // scripts pipe `list` into `rg`, `wc`, `awk` and friends, all of which
+    // may stop reading before `list` finishes writing. `list` must not treat
+    // the reader closing early as its own failure.
+    let dir = common::test_dir("list_piped_into_head_exits_cleanly_with_no_stderr");
+    common::tickets(&dir, &["init"]);
+    for i in 0..10 {
+        common::create_ticket(&dir, &format!("Ticket {i}"));
+    }
+
+    let (status, stderr) = list_piped_into_head_one(&dir);
+    assert!(
+        status.success(),
+        "list should exit 0 when its reader closes early, got {status:?}"
+    );
+    assert_eq!(
+        stderr, "",
+        "list should print nothing to stderr on a broken pipe"
+    );
+}
+
+#[test]
+fn list_piped_into_head_exits_cleanly_with_large_output() {
+    // The failure is buffer-size dependent, not row-count dependent: a small
+    // listing can finish writing before `head` closes its end of the pipe,
+    // masking the bug. A large listing guarantees `list` is still writing
+    // when the pipe closes.
+    let dir = common::test_dir("list_piped_into_head_exits_cleanly_with_large_output");
+    common::tickets(&dir, &["init"]);
+    for i in 0..500 {
+        common::create_ticket(&dir, &format!("Ticket number {i} with a longer title"));
+    }
+
+    let (status, stderr) = list_piped_into_head_one(&dir);
+    assert!(
+        status.success(),
+        "list should exit 0 when its reader closes early, got {status:?}"
+    );
+    assert_eq!(
+        stderr, "",
+        "list should print nothing to stderr on a broken pipe"
+    );
 }

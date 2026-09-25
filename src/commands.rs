@@ -333,15 +333,24 @@ pub fn cmd_list(dir: WorkingDir, _cfg: &Config, args: ListArgs) -> Result<()> {
             Some(style) => format!("{style}{padded_status}{style:#}"),
             None => padded_status,
         };
-        writeln!(
+        let result = writeln!(
             out,
             "{}  {}  {}  {}",
             pad_to_display_width(id, id_w),
             styled_status,
             pad_to_display_width(type_col, type_w),
             title,
-        )
-        .context("failed to write to stdout")?;
+        );
+        // A downstream reader closing early (`tickets list | head`) shows up
+        // here as `BrokenPipe` — that is the reader choosing to stop, not a
+        // failure of `list` itself, so it exits cleanly and silently rather
+        // than surfacing as `error: ...` with a non-zero exit. Any other
+        // write error (disk full, I/O error) still propagates.
+        match result {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => return Ok(()),
+            Err(e) => return Err(e).context("failed to write to stdout"),
+        }
     }
     Ok(())
 }
