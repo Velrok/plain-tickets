@@ -87,3 +87,103 @@ fn blocker_archived_and_done_never_appears_as_a_node_or_label() {
         "archived done blocker title must not appear anywhere: {stdout}"
     );
 }
+
+// --- xptucc / t9p76e: out-of-active-set stub nodes ---
+
+#[test]
+fn archived_non_done_blocker_keeps_dependent_blocked_and_renders_stub_root() {
+    let dir = common::test_dir(
+        "deps_graph_archived_non_done_blocker_keeps_dependent_blocked_and_renders_stub_root",
+    );
+    common::tickets(&dir, &["init"]);
+    let blocker = create_todo_ticket(&dir, "Old rejected setup");
+    common::tickets(&dir, &["edit", &blocker, "--status", "rejected"]);
+    let out = common::tickets(&dir, &["archive", &blocker]);
+    assert!(out.status.success(), "archive failed: {:?}", out);
+    let dependent = create_todo_ticket(&dir, "Migrate to new queue");
+    common::tickets(&dir, &["edit", &dependent, "--blocked-by", &blocker]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let expected =
+        format!("[archived: {blocker} rejected]\n└── {dependent}  todo  Migrate to new queue\n");
+    assert_eq!(stdout, expected);
+}
+
+#[test]
+fn archived_stub_names_both_the_archived_ticket_id_and_its_status() {
+    let dir = common::test_dir(
+        "deps_graph_archived_stub_names_both_the_archived_ticket_id_and_its_status",
+    );
+    common::tickets(&dir, &["init"]);
+    let blocker = create_todo_ticket(&dir, "Abandoned approach");
+    common::tickets(&dir, &["edit", &blocker, "--status", "rejected"]);
+    common::tickets(&dir, &["archive", &blocker]);
+    let dependent = create_todo_ticket(&dir, "Depends on abandoned work");
+    common::tickets(&dir, &["edit", &dependent, "--blocked-by", &blocker]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains(&format!("[archived: {blocker} rejected]")),
+        "stub must name both the archived id and its status: {stdout}"
+    );
+}
+
+#[test]
+fn missing_blocker_id_renders_as_missing_stub_with_dependent_nested() {
+    let dir = common::test_dir(
+        "deps_graph_missing_blocker_id_renders_as_missing_stub_with_dependent_nested",
+    );
+    common::tickets(&dir, &["init"]);
+    let dependent = create_todo_ticket(&dir, "Migrate to new queue");
+    common::tickets(&dir, &["edit", &dependent, "--blocked-by", "zz9999"]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let expected = format!("[missing: zz9999]\n└── {dependent}  todo  Migrate to new queue\n");
+    assert_eq!(stdout, expected);
+}
+
+#[test]
+fn missing_and_archived_stubs_are_visually_distinct_from_each_other() {
+    let dir = common::test_dir(
+        "deps_graph_missing_and_archived_stubs_are_visually_distinct_from_each_other",
+    );
+    common::tickets(&dir, &["init"]);
+    let archived_blocker = create_todo_ticket(&dir, "Rejected old approach");
+    common::tickets(&dir, &["edit", &archived_blocker, "--status", "rejected"]);
+    common::tickets(&dir, &["archive", &archived_blocker]);
+    let dependent_a = create_todo_ticket(&dir, "Depends on rejected work");
+    common::tickets(
+        &dir,
+        &["edit", &dependent_a, "--blocked-by", &archived_blocker],
+    );
+    let dependent_b = create_todo_ticket(&dir, "Depends on unknown id");
+    common::tickets(&dir, &["edit", &dependent_b, "--blocked-by", "zz9999"]);
+
+    let out = common::tickets(&dir, &["deps-graph"]);
+    assert!(out.status.success(), "deps-graph failed: {:?}", out);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let archived_stub = format!("[archived: {archived_blocker} rejected]");
+    let missing_stub = "[missing: zz9999]";
+    assert!(
+        stdout.contains(&archived_stub),
+        "expected archived stub in output: {stdout}"
+    );
+    assert!(
+        stdout.contains(missing_stub),
+        "expected missing stub in output: {stdout}"
+    );
+    assert_ne!(
+        archived_stub, missing_stub,
+        "the two stub forms must render differently from each other"
+    );
+}
