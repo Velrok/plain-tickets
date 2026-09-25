@@ -501,6 +501,27 @@ mod tests {
     }
 
     #[test]
+    fn load_tickets_reports_ticket_with_empty_id_as_failure_not_dropped() {
+        // r0ro1x: a ticket file with a bad id (here, empty) must go through
+        // the same load-failure path as any other malformed front matter -
+        // it must not be silently dropped.
+        let dir = tmp_dir("empty_id");
+        write_ticket_file(&dir, "a1_valid.md", &valid_ticket_contents("a1"));
+        write_ticket_file(&dir, "b2_bad_id.md", &valid_ticket_contents(""));
+
+        let working_dir = WorkingDir::new(dir).unwrap();
+        let (tickets, failures) = load_tickets(&working_dir).unwrap();
+
+        assert_eq!(tickets.len(), 1, "valid ticket must still load");
+        assert_eq!(
+            failures.len(),
+            1,
+            "ticket with a bad id must be recorded, not silently dropped"
+        );
+        assert!(failures[0].path.to_string_lossy().contains("b2_bad_id.md"));
+    }
+
+    #[test]
     fn build_app_no_flash_when_everything_loads_cleanly() {
         let dir = tmp_dir("build_app_no_flash");
         write_ticket_file(&dir, "a1_valid.md", &valid_ticket_contents("a1"));

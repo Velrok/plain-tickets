@@ -321,6 +321,26 @@ mod tests {
         assert!(exactly.parse::<Title>().is_ok());
     }
 
+    #[test]
+    fn title_empty_via_deserialize_is_err() {
+        // Same hole as TicketId (r0ro1x): serde derives straight past
+        // FromStr's validation.
+        let result: Result<Title, _> = serde_yaml::from_str("\"\"");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn title_invalid_chars_via_deserialize_is_err() {
+        let result: Result<Title, _> = serde_yaml::from_str("\"foo!\"");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn title_valid_via_deserialize_round_trips() {
+        let t: Title = serde_yaml::from_str("Fix login bug").unwrap();
+        assert_eq!(t.to_string(), "Fix login bug");
+    }
+
     // ── Title::slugify ────────────────────────────────────────────────────────
 
     #[test]
@@ -370,6 +390,36 @@ mod tests {
         assert!(!t.slug_matches_filename(&id, "xyz999_fix-login-bug.md"));
     }
 
+    // ── TicketId::from_str / Deserialize (r0ro1x) ───────────────────────────────
+
+    #[test]
+    fn ticket_id_empty_via_from_str_is_err() {
+        assert!("".parse::<TicketId>().is_err());
+    }
+
+    #[test]
+    fn ticket_id_non_empty_via_from_str_is_ok() {
+        assert!("abc123".parse::<TicketId>().is_ok());
+    }
+
+    #[test]
+    fn ticket_id_empty_via_deserialize_is_err() {
+        // Front matter arrives via serde, not FromStr - this is the seam the
+        // bug lives in. `serde_yaml::from_str` here exercises exactly the path
+        // a ticket file's front matter goes through.
+        let result: Result<TicketId, _> = serde_yaml::from_str("\"\"");
+        assert!(
+            result.is_err(),
+            "empty id deserialised via serde without going through FromStr's validation"
+        );
+    }
+
+    #[test]
+    fn ticket_id_valid_via_deserialize_round_trips() {
+        let id: TicketId = serde_yaml::from_str("abc123").unwrap();
+        assert_eq!(id.to_string(), "abc123");
+    }
+
     // ── Ticket parse / display ────────────────────────────────────────────────
 
     fn minimal_ticket_str() -> &'static str {
@@ -416,6 +466,18 @@ mod tests {
         assert!(bad.parse::<Ticket>().is_err());
     }
 
+    #[test]
+    fn ticket_front_matter_blocked_by_empty_id_is_err() {
+        // The exact reproduction from r0ro1x: `blocked_by: [""]` parsed
+        // without complaint and `deps-graph` went on to render a
+        // `[missing: ]` stub for it.
+        let bad = "---\nid: abc123\ntitle: My ticket\ntype: task\nstatus: draft\ntags: []\nparent: null\nblocked_by: [\"\"]\ncreated_at: 2024-01-01T00:00:00Z\nupdated_at: 2024-01-01T00:00:00Z\n---\n";
+        assert!(
+            bad.parse::<Ticket>().is_err(),
+            "front matter with an empty blocked_by id must be rejected at parse time"
+        );
+    }
+
     // ── Tag::from_str ─────────────────────────────────────────────────────────
 
     #[test]
@@ -439,6 +501,26 @@ mod tests {
     fn tag_special_chars_are_err() {
         assert!("foo!".parse::<Tag>().is_err());
         assert!("foo.bar".parse::<Tag>().is_err());
+    }
+
+    #[test]
+    fn tag_empty_via_deserialize_is_err() {
+        // Same hole as TicketId (r0ro1x): serde derives straight past
+        // FromStr's validation.
+        let result: Result<Tag, _> = serde_yaml::from_str("\"\"");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn tag_invalid_chars_via_deserialize_is_err() {
+        let result: Result<Tag, _> = serde_yaml::from_str("\"foo!\"");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn tag_valid_via_deserialize_round_trips() {
+        let t: Tag = serde_yaml::from_str("auth").unwrap();
+        assert_eq!(t.to_string(), "auth");
     }
 
     // ── TicketStatus::review ──────────────────────────────────────────────────
