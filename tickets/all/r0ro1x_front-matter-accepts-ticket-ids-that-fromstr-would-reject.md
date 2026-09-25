@@ -2,13 +2,13 @@
 id: r0ro1x
 title: front matter accepts ticket ids that FromStr would reject
 type: bug
-status: todo
+status: in-progress
 tags:
 - validation
 parent: null
 blocked_by: []
 created_at: 2026-09-25T13:27:39.105525Z
-updated_at: 2026-09-25T13:27:39.105525Z
+updated_at: 2026-09-25T13:45:55.728658Z
 ---
 
 ## Behaviour
