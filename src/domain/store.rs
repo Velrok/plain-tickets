@@ -39,11 +39,54 @@ pub fn read(root: &Path, id: ID) -> Result<Option<Ticket>, String> {
     }
 }
 
+fn archived_path(root: &Path, id: ID) -> PathBuf {
+    root.join("tickets/archived").join(format!("{id}.md"))
+}
+
+/// The error for an ID that is not active: says so when the ticket is archived.
+pub fn not_found(root: &Path, id: ID) -> String {
+    if archived_path(root, id).is_file() {
+        format!("ticket {id} is archived")
+    } else {
+        format!("no ticket with ID {id}")
+    }
+}
+
+/// Like `read`, but a missing ticket is an error.
+pub fn require(root: &Path, id: ID) -> Result<Ticket, String> {
+    read(root, id)?.ok_or_else(|| not_found(root, id))
+}
+
+/// Moves an active ticket to `tickets/archived`. Never overwrites.
+pub fn archive(root: &Path, id: ID) -> Result<(), String> {
+    let from = path(root, id);
+    let to = archived_path(root, id);
+    let dir = to.parent().expect("archive path has a parent");
+    std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    if to.exists() {
+        return Err(format!("{} already exists", to.display()));
+    }
+    std::fs::rename(&from, &to).map_err(|e| format!("cannot move {}: {e}", from.display()))
+}
+
+/// Moves an archived ticket back to `tickets/all`. Never overwrites.
+pub fn unarchive(root: &Path, id: ID) -> Result<(), String> {
+    let from = archived_path(root, id);
+    let to = path(root, id);
+    if !from.is_file() {
+        return Err(format!("no archived ticket with ID {id}"));
+    }
+    if to.exists() {
+        return Err(format!("{} already exists", to.display()));
+    }
+    std::fs::rename(&from, &to).map_err(|e| format!("cannot move {}: {e}", from.display()))
+}
+
 /// Overwrites an existing ticket file. Errors if the ticket does not exist.
 pub fn replace(root: &Path, ticket: &Ticket) -> Result<(), String> {
     let path = path(root, ticket.id);
     if !path.is_file() {
-        return Err(format!("no ticket with ID {}", ticket.id));
+        return Err(not_found(root, ticket.id));
     }
     std::fs::write(&path, ticket.to_string())
         .map_err(|e| format!("cannot write {}: {e}", path.display()))
@@ -51,8 +94,16 @@ pub fn replace(root: &Path, ticket: &Ticket) -> Result<(), String> {
 
 /// Every active ticket. A missing `tickets/all` directory means no tickets.
 pub fn list(root: &Path) -> Result<Vec<Ticket>, String> {
-    let dir = root.join("tickets/all");
-    let entries = match std::fs::read_dir(&dir) {
+    read_dir(&root.join("tickets/all"))
+}
+
+/// Every archived ticket.
+pub fn list_archived(root: &Path) -> Result<Vec<Ticket>, String> {
+    read_dir(&root.join("tickets/archived"))
+}
+
+fn read_dir(dir: &Path) -> Result<Vec<Ticket>, String> {
+    let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(format!("cannot read {}: {e}", dir.display())),

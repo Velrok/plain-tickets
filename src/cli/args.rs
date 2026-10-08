@@ -52,6 +52,9 @@ pub enum Command {
         /// Only open tickets whose blockers are all done
         #[arg(long)]
         ready: bool,
+        /// List archived tickets instead of active ones
+        #[arg(long)]
+        archived: bool,
     },
     /// Open a ticket in $EDITOR
     Edit { id: ID },
@@ -98,9 +101,9 @@ pub enum Command {
     /// Append text to the body
     Note { id: ID, text: String },
     /// Archive a ticket (reversible)
-    Archive { id: String },
+    Archive { id: ID },
     /// Restore an archived ticket
-    Unarchive { id: String },
+    Unarchive { id: ID },
 }
 
 #[cfg(test)]

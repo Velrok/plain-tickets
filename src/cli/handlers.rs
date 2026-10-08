@@ -39,6 +39,7 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             parent,
             blocked,
             ready,
+            archived,
         } => {
             let filter = Filter {
                 status,
@@ -48,7 +49,12 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
                 blocked,
                 ready,
             };
-            for t in filter.select(store::list(root)?, config) {
+            let found = if archived {
+                store::list_archived(root)?
+            } else {
+                store::list(root)?
+            };
+            for t in filter.select(found, config) {
                 println!("{}", TicketCliLinePresenter(&t));
             }
             Ok(())
@@ -88,6 +94,8 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             }
             modify(root, config, id, Change::Set(fields))
         }
+        Command::Archive { id } => archive(root, id),
+        Command::Unarchive { id } => store::unarchive(root, id),
         Command::Note { id, text } => modify(root, config, id, Change::AppendNote(text)),
         _ => Err("not implemented yet".to_string()),
     }
@@ -95,9 +103,7 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
 
 fn ensure_exist<'a>(root: &Path, ids: impl Iterator<Item = &'a ID>) -> Result<(), String> {
     for id in ids {
-        if store::read(root, *id)?.is_none() {
-            return Err(format!("no ticket with ID {id}"));
-        }
+        store::require(root, *id)?;
     }
     Ok(())
 }
@@ -110,7 +116,7 @@ fn now() -> u64 {
 
 /// Applies `change` to the ticket and saves it, if it changed anything.
 fn modify(root: &Path, config: &Config, id: ID, change: Change) -> Result<(), String> {
-    let ticket = store::read(root, id)?.ok_or_else(|| format!("no ticket with ID {id}"))?;
+    let ticket = store::require(root, id)?;
     save_revision(root, config, &ticket, ticket.apply(change))
 }
 
@@ -128,6 +134,18 @@ fn save_revision(
         }
         None => Ok(()),
     }
+}
+
+/// Archives a done or rejected ticket.
+fn archive(root: &Path, id: ID) -> Result<(), String> {
+    let ticket = store::require(root, id)?;
+    if !ticket.status.is_terminal() {
+        return Err(format!(
+            "cannot archive {id}: status '{}' is not done or rejected",
+            ticket.status
+        ));
+    }
+    store::archive(root, id)
 }
 
 /// Runs `$VISUAL` (or `$EDITOR`) on a temporary file holding `text` and returns
@@ -154,7 +172,7 @@ fn edit_text(id: ID, text: &str) -> Result<String, String> {
 
 /// Opens the ticket in `$EDITOR` and saves the result.
 fn edit(root: &Path, config: &Config, id: ID) -> Result<(), String> {
-    let ticket = store::read(root, id)?.ok_or_else(|| format!("no ticket with ID {id}"))?;
+    let ticket = store::require(root, id)?;
     let edited: Ticket = edit_text(id, &ticket.to_string())?.parse()?;
     save_revision(root, config, &ticket, edited)
 }
