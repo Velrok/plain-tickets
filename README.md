@@ -24,7 +24,7 @@ Markdown tickets with YAML front matter, one file per ticket.
   - [x] `-p, --parent <id>`
   - [x] `--blocked` — has an unfinished blocker
   - [x] `--ready` — open, and every blocker is done or rejected
-  - [ ] `--archived` — later
+  - [x] `--archived` — archived tickets only, instead of active ones
 - [x] `tickets edit <id>` — open in `$VISUAL` / `$EDITOR`; `id` and `created_at` are immutable
 - [x] `tickets set <id>` — `--title`, `--status`, `--type`, `--parent`, `--clear-type`, `--clear-parent`
 - [x] `tickets tag <id> <tag>...` — add tags
@@ -32,5 +32,5 @@ Markdown tickets with YAML front matter, one file per ticket.
 - [x] `tickets block <id> <blocker>...` — add blockers
 - [x] `tickets unblock <id> <blocker>...` — remove blockers
 - [x] `tickets note <id> <text>` — append text to the body
-- [ ] `tickets archive <id>` — reversible
-- [ ] `tickets unarchive <id>` — restore an archived ticket
+- [x] `tickets archive <id>` — move a done or rejected ticket to `tickets/archived/`
+- [x] `tickets unarchive <id>` — restore an archived ticket
