@@ -34,11 +34,6 @@ impl Config {
         &self.statuses[0]
     }
 
-    /// Custom statuses in display order, without the built-ins.
-    pub fn custom_statuses(&self) -> &[Status] {
-        &self.statuses
-    }
-
     /// True for the built-ins and every configured status.
     pub fn allows(&self, status: &Status) -> bool {
         status.is_terminal() || self.statuses.contains(status)
@@ -152,7 +147,7 @@ mod tests {
     #[test]
     fn parses_and_normalises_statuses() {
         let c: Config = r#"statuses = ["Todo", " In Review "]"#.parse().unwrap();
-        assert_eq!(c.custom_statuses(), [custom("todo"), custom("in review")]);
+        assert_eq!(c.statuses, [custom("todo"), custom("in review")]);
     }
 
     #[test]
@@ -239,7 +234,7 @@ extra = 1"#
         std::fs::write(dir.join(CONFIG_PATH), r#"statuses = ["backlog"]"#).unwrap();
         let err = init(&dir).unwrap_err();
         assert!(err.contains("already exists"), "{err}");
-        assert_eq!(load(&dir).unwrap().custom_statuses(), [custom("backlog")]);
+        assert_eq!(load(&dir).unwrap().statuses, [custom("backlog")]);
     }
 
     #[test]
@@ -250,7 +245,7 @@ extra = 1"#
         let nested = dir.join("a/b");
         std::fs::create_dir_all(&nested).unwrap();
         let config = load(&nested).unwrap();
-        assert_eq!(config.custom_statuses(), [custom("backlog")]);
+        assert_eq!(config.statuses, [custom("backlog")]);
         assert!(!nested.join(".tickets").exists());
     }
 
@@ -266,7 +261,7 @@ extra = 1"#
     #[test]
     fn default_config_has_todo_and_in_progress() {
         let c = Config::default();
-        assert_eq!(c.custom_statuses(), [custom("todo"), custom("in progress")]);
+        assert_eq!(c.statuses, [custom("todo"), custom("in progress")]);
     }
 
     #[test]
