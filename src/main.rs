@@ -4,5 +4,5 @@ mod cli;
 mod domain;
 
 fn main() {
-    let _cli = cli::Cli::parse();
+    let _cli = cli::args::Cli::parse();
 }
