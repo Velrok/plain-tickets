@@ -1,12 +1,8 @@
 use clap::Parser;
 
+mod cli;
 mod domain;
 
-/// Markdown tickets with YAML front matter.
-#[derive(Parser)]
-#[command(version, about)]
-struct Cli {}
-
 fn main() {
-    let _cli = Cli::parse();
+    let _cli = cli::Cli::parse();
 }
