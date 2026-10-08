@@ -78,6 +78,12 @@ fn find(start: &Path) -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
+/// The directory that holds the nearest `.tickets/`; tickets live under its `tickets/`.
+pub fn root(start: &Path) -> Option<PathBuf> {
+    let config = find(start)?;
+    Some(config.parent()?.parent()?.to_path_buf())
+}
+
 /// Reads the nearest config. Errors if none exists; `init` creates one.
 pub fn load(start: &Path) -> Result<Config, String> {
     let Some(path) = find(start) else {

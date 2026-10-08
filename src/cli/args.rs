@@ -1,3 +1,5 @@
+use crate::domain::id::ID;
+use crate::domain::status::Status;
 use clap::{Parser, Subcommand};
 
 /// Markdown tickets with YAML front matter.
@@ -17,12 +19,15 @@ pub enum Command {
         title: String,
         #[arg(short = 't', long)]
         r#type: Option<String>,
+        /// Defaults to the first configured status
+        #[arg(short, long)]
+        status: Option<Status>,
         #[arg(short = 'g', long = "tag")]
         tags: Vec<String>,
         #[arg(short, long)]
-        parent: Option<String>,
+        parent: Option<ID>,
         #[arg(short, long = "blocked-by")]
-        blocked_by: Vec<String>,
+        blocked_by: Vec<ID>,
         /// Body text; opens $EDITOR if omitted on a terminal
         #[arg(short, long)]
         message: Option<String>,

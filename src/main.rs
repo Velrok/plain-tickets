@@ -15,7 +15,9 @@ fn main() {
         return;
     }
 
-    let _config = config::load(&cwd).unwrap_or_else(|e| fail(e));
+    let config = config::load(&cwd).unwrap_or_else(|e| fail(e));
+    let root = config::root(&cwd).unwrap_or_else(|| fail("no .tickets directory found".into()));
+    cli::handlers::run(cli.command, &root, &config).unwrap_or_else(|e| fail(e));
 }
 
 fn fail(message: String) -> ! {
