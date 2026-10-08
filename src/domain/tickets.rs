@@ -1,10 +1,10 @@
 use super::id::ID;
+use super::status::Status;
 use serde::{Deserialize, Serialize};
 
 type Tag = String;
 type Title = String;
 type Type = String;
-type Status = String;
 
 /// The body is stored after the YAML front matter, so serde skips it.
 #[derive(Serialize, Deserialize)]
@@ -63,7 +63,7 @@ mod tests {
             id: ID(7),
             title: "Fix it".into(),
             r#type: "bug".into(),
-            status: "open".into(),
+            status: Status::Custom("open".into()),
             parent: None,
             blocked_by: vec![ID(1), ID(2)],
             body: body.into(),
