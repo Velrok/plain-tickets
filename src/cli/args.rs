@@ -54,7 +54,7 @@ pub enum Command {
         ready: bool,
     },
     /// Open a ticket in $EDITOR
-    Edit { id: String },
+    Edit { id: ID },
     /// Set scalar fields
     Set {
         id: String,

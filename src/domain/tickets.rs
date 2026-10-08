@@ -40,12 +40,44 @@ pub struct NewTicket {
     pub body: String,
 }
 
+/// Trims the title; it must be a single non-empty line.
+fn clean_title(title: &str) -> Result<Title, String> {
+    let title = title.trim();
+    if title.is_empty() || title.contains('\n') {
+        return Err("title must be a single non-empty line".to_string());
+    }
+    Ok(title.to_string())
+}
+
 impl Ticket {
-    pub fn new(draft: NewTicket, config: &Config, id: ID, now: u64) -> Result<Ticket, String> {
-        let title = draft.title.trim().to_string();
-        if title.is_empty() || title.contains('\n') {
-            return Err("title must be a single non-empty line".to_string());
+    /// The edited ticket as it should be saved, or `None` if nothing but
+    /// `updated_at` changed. `updated_at` is always set here.
+    pub fn revise(
+        &self,
+        mut edited: Ticket,
+        config: &Config,
+        now: u64,
+    ) -> Result<Option<Ticket>, String> {
+        if edited.id != self.id {
+            return Err("id cannot be changed".to_string());
         }
+        if edited.created_at != self.created_at {
+            return Err("created_at cannot be changed".to_string());
+        }
+        edited.title = clean_title(&edited.title)?;
+        if !config.allows(&edited.status) {
+            return Err(format!("status '{}' is not in the config", edited.status));
+        }
+        edited.updated_at = self.updated_at;
+        if edited.to_string() == self.to_string() {
+            return Ok(None);
+        }
+        edited.updated_at = now;
+        Ok(Some(edited))
+    }
+
+    pub fn new(draft: NewTicket, config: &Config, id: ID, now: u64) -> Result<Ticket, String> {
+        let title = clean_title(&draft.title)?;
         let status = draft
             .status
             .unwrap_or_else(|| config.default_status().clone());

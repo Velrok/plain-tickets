@@ -39,6 +39,16 @@ pub fn read(root: &Path, id: ID) -> Result<Option<Ticket>, String> {
     }
 }
 
+/// Overwrites an existing ticket file. Errors if the ticket does not exist.
+pub fn replace(root: &Path, ticket: &Ticket) -> Result<(), String> {
+    let path = path(root, ticket.id);
+    if !path.is_file() {
+        return Err(format!("no ticket with ID {}", ticket.id));
+    }
+    std::fs::write(&path, ticket.to_string())
+        .map_err(|e| format!("cannot write {}: {e}", path.display()))
+}
+
 /// Every active ticket. A missing `tickets/all` directory means no tickets.
 pub fn list(root: &Path) -> Result<Vec<Ticket>, String> {
     let dir = root.join("tickets/all");

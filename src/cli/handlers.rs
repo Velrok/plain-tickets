@@ -53,21 +53,65 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             }
             Ok(())
         }
+        Command::Edit { id } => edit(root, config, id),
         _ => Err("not implemented yet".to_string()),
+    }
+}
+
+fn ensure_exist<'a>(root: &Path, ids: impl Iterator<Item = &'a ID>) -> Result<(), String> {
+    for id in ids {
+        if store::read(root, *id)?.is_none() {
+            return Err(format!("no ticket with ID {id}"));
+        }
+    }
+    Ok(())
+}
+
+fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+/// Runs `$VISUAL` (or `$EDITOR`) on a temporary file holding `text` and returns
+/// what the editor left in it.
+fn edit_text(id: ID, text: &str) -> Result<String, String> {
+    let editor = std::env::var("VISUAL")
+        .or_else(|_| std::env::var("EDITOR"))
+        .map_err(|_| "set $VISUAL or $EDITOR to choose an editor".to_string())?;
+    let tmp = std::env::temp_dir().join(format!("tickets-{id}-{}.md", std::process::id()));
+    std::fs::write(&tmp, text).map_err(|e| format!("cannot write {}: {e}", tmp.display()))?;
+    let status = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!("{editor} \"$0\""))
+        .arg(&tmp)
+        .status()
+        .map_err(|e| format!("cannot run editor: {e}"))?;
+    let edited = std::fs::read_to_string(&tmp);
+    let _ = std::fs::remove_file(&tmp);
+    if !status.success() {
+        return Err(format!("editor exited with {status}"));
+    }
+    edited.map_err(|e| format!("cannot read edited file: {e}"))
+}
+
+/// Opens the ticket in `$EDITOR` and saves the result.
+fn edit(root: &Path, config: &Config, id: ID) -> Result<(), String> {
+    let ticket = store::read(root, id)?.ok_or_else(|| format!("no ticket with ID {id}"))?;
+    let edited: Ticket = edit_text(id, &ticket.to_string())?.parse()?;
+    match ticket.revise(edited, config, now())? {
+        Some(revised) => {
+            ensure_exist(root, revised.parent.iter().chain(&revised.blocked_by))?;
+            store::replace(root, &revised)
+        }
+        None => Ok(()),
     }
 }
 
 /// Creates a ticket under `root` and returns its ID.
 fn new(root: &Path, config: &Config, draft: NewTicket) -> Result<ID, String> {
-    for id in draft.parent.iter().chain(&draft.blocked_by) {
-        if store::read(root, *id)?.is_none() {
-            return Err(format!("no ticket with ID {id}"));
-        }
-    }
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs());
-    let ticket = Ticket::new(draft, config, ID::rand(), now)?;
+    ensure_exist(root, draft.parent.iter().chain(&draft.blocked_by))?;
+    let ticket = Ticket::new(draft, config, ID::rand(), now())?;
     store::create(root, &ticket)?;
     Ok(ticket.id)
 }

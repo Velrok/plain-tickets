@@ -38,3 +38,28 @@ pub fn new_id(dir: &Path, args: &[&str]) -> String {
     assert!(out.status.success(), "{}", stderr(&out));
     stdout(&out)
 }
+
+/// Runs `tickets` with `$EDITOR` set to a script that executes `body` with
+/// the ticket file as `$1`. `$VISUAL` is cleared.
+pub fn tickets_editing(dir: &Path, args: &[&str], body: &str) -> Output {
+    use std::os::unix::fs::PermissionsExt;
+    let script = dir.join("editor.sh");
+    std::fs::write(&script, format!("#!/bin/sh\n{body}\n")).unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    Command::new(env!("CARGO_BIN_EXE_tickets"))
+        .args(args)
+        .current_dir(dir)
+        .env_remove("VISUAL")
+        .env("EDITOR", &script)
+        .output()
+        .unwrap()
+}
+
+pub fn ticket_text(dir: &Path, id: &str) -> String {
+    std::fs::read_to_string(dir.join(format!("tickets/all/{id}.md"))).unwrap()
+}
+
+/// Shell snippet that replaces the title line of the file in `$1`.
+pub fn set_title(title: &str) -> String {
+    format!("sed 's/^title: .*/title: {title}/' \"$1\" > \"$1.new\" && mv \"$1.new\" \"$1\"")
+}
