@@ -8,7 +8,7 @@ type Title = String;
 type Type = String;
 
 /// The body is stored after the YAML front matter, so serde skips it.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Ticket {
     pub id: ID,
 
@@ -28,6 +28,35 @@ pub struct Ticket {
     pub body: String,
 }
 
+/// Fields for `set`; `None` leaves a field as it is.
+#[derive(Default)]
+pub struct SetFields {
+    pub title: Option<Title>,
+    pub status: Option<Status>,
+    /// `Some(None)` clears the field.
+    pub r#type: Option<Option<Type>>,
+    pub parent: Option<Option<ID>>,
+}
+
+impl SetFields {
+    pub fn is_empty(&self) -> bool {
+        self.title.is_none()
+            && self.status.is_none()
+            && self.r#type.is_none()
+            && self.parent.is_none()
+    }
+}
+
+/// A single edit to an existing ticket, applied by `Ticket::apply`.
+pub enum Change {
+    AppendNote(String),
+    AddTags(Vec<Tag>),
+    RemoveTags(Vec<Tag>),
+    AddBlockers(Vec<ID>),
+    RemoveBlockers(Vec<ID>),
+    Set(SetFields),
+}
+
 /// User-supplied fields for a new ticket; everything else is derived.
 pub struct NewTicket {
     pub title: Title,
@@ -40,6 +69,22 @@ pub struct NewTicket {
     pub body: String,
 }
 
+/// Trims each tag and drops duplicates, keeping first-seen order. Tags must be
+/// single non-empty lines.
+fn clean_tags(tags: Vec<Tag>) -> Result<Vec<Tag>, String> {
+    let mut cleaned: Vec<Tag> = Vec::new();
+    for tag in tags {
+        let tag = tag.trim();
+        if tag.is_empty() || tag.contains('\n') {
+            return Err("a tag must be a single non-empty line".to_string());
+        }
+        if !cleaned.iter().any(|t| t == tag) {
+            cleaned.push(tag.to_string());
+        }
+    }
+    Ok(cleaned)
+}
+
 /// Trims the title; it must be a single non-empty line.
 fn clean_title(title: &str) -> Result<Title, String> {
     let title = title.trim();
@@ -50,6 +95,33 @@ fn clean_title(title: &str) -> Result<Title, String> {
 }
 
 impl Ticket {
+    /// A copy of this ticket with `change` applied. Not validated; pass the
+    /// result to `revise`.
+    pub fn apply(&self, change: Change) -> Ticket {
+        let mut t = self.clone();
+        match change {
+            Change::AddTags(tags) => t.tags.extend(tags),
+            Change::AddBlockers(ids) => t.blocked_by.extend(ids),
+            Change::RemoveBlockers(ids) => t.blocked_by.retain(|b| !ids.contains(b)),
+            Change::Set(f) => {
+                t.title = f.title.unwrap_or(t.title);
+                t.status = f.status.unwrap_or(t.status);
+                t.r#type = f.r#type.unwrap_or(t.r#type);
+                t.parent = f.parent.unwrap_or(t.parent);
+            }
+            Change::RemoveTags(tags) => t.tags.retain(|x| !tags.iter().any(|r| r.trim() == x)),
+            Change::AppendNote(text) => {
+                t.body.truncate(t.body.trim_end().len());
+                if !t.body.is_empty() {
+                    t.body.push_str("\n\n");
+                }
+                t.body.push_str(&text);
+                t.body.push('\n');
+            }
+        }
+        t
+    }
+
     /// The edited ticket as it should be saved, or `None` if nothing but
     /// `updated_at` changed. `updated_at` is always set here.
     pub fn revise(
@@ -65,6 +137,19 @@ impl Ticket {
             return Err("created_at cannot be changed".to_string());
         }
         edited.title = clean_title(&edited.title)?;
+        edited.tags = clean_tags(std::mem::take(&mut edited.tags))?;
+        if edited.blocked_by.contains(&self.id) {
+            return Err("a ticket cannot block itself".to_string());
+        }
+        if edited.parent == Some(self.id) {
+            return Err("a ticket cannot be its own parent".to_string());
+        }
+        let mut seen = Vec::new();
+        edited.blocked_by.retain(|id| {
+            let fresh = !seen.contains(id);
+            seen.push(*id);
+            fresh
+        });
         if !config.allows(&edited.status) {
             return Err(format!("status '{}' is not in the config", edited.status));
         }
@@ -84,12 +169,7 @@ impl Ticket {
         if !config.allows(&status) {
             return Err(format!("status '{status}' is not in the config"));
         }
-        let mut tags: Vec<Tag> = Vec::new();
-        for tag in draft.tags {
-            if !tags.contains(&tag) {
-                tags.push(tag);
-            }
-        }
+        let tags = clean_tags(draft.tags)?;
         Ok(Ticket {
             id,
             title,
