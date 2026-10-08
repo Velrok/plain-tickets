@@ -10,6 +10,8 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
+    /// Create .tickets/config.toml with the default statuses
+    Init,
     /// Create a ticket and print its ID
     New {
         title: String,

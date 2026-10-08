@@ -1,5 +1,6 @@
 use crate::domain::status::Status;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 /// Parsed from `.tickets/config.toml`.
 ///
@@ -11,7 +12,7 @@ pub struct Config {
     statuses: Vec<Status>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawConfig {
     statuses: Vec<String>,
@@ -55,6 +56,58 @@ impl Config {
                 .unwrap_or(self.statuses.len() + 2),
         }
     }
+}
+
+impl std::fmt::Display for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let raw = RawConfig {
+            statuses: self.statuses.iter().map(|s| s.to_string()).collect(),
+        };
+        let toml = toml::to_string(&raw).expect("Config serialisation is infallible");
+        f.write_str(&toml)
+    }
+}
+
+const CONFIG_PATH: &str = ".tickets/config.toml";
+
+/// The nearest `.tickets/config.toml` in `start` or any of its ancestors.
+fn find(start: &Path) -> Option<PathBuf> {
+    start
+        .ancestors()
+        .map(|dir| dir.join(CONFIG_PATH))
+        .find(|path| path.is_file())
+}
+
+/// Reads the nearest config. Errors if none exists; `init` creates one.
+pub fn load(start: &Path) -> Result<Config, String> {
+    let Some(path) = find(start) else {
+        return Err("no .tickets/config.toml found; run `tickets init`".to_string());
+    };
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    text.parse().map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Writes the default config to `dir/.tickets/config.toml` and returns its
+/// path. Fails if that file already exists.
+pub fn init(dir: &Path) -> Result<PathBuf, String> {
+    use std::io::Write;
+
+    let path = dir.join(CONFIG_PATH);
+    let parent = path.parent().expect("config path has a parent");
+    std::fs::create_dir_all(parent)
+        .map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::AlreadyExists => format!("{} already exists", path.display()),
+            _ => format!("cannot write {}: {e}", path.display()),
+        })?;
+    file.write_all(Config::default().to_string().as_bytes())
+        .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+    Ok(path)
 }
 
 impl std::str::FromStr for Config {
@@ -142,6 +195,66 @@ extra = 1"#
     #[test]
     fn rejects_missing_statuses_key() {
         assert!("".parse::<Config>().is_err());
+    }
+
+    #[test]
+    fn default_config_round_trips_through_toml() {
+        let text = Config::default().to_string();
+        assert_eq!(text.parse::<Config>().unwrap(), Config::default());
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("tickets-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn load_errors_without_writing_when_missing() {
+        let dir = scratch("missing");
+        let err = load(&dir).unwrap_err();
+        assert!(err.contains("tickets init"), "{err}");
+        assert!(!dir.join(".tickets").exists());
+    }
+
+    #[test]
+    fn init_writes_the_default_config() {
+        let dir = scratch("init");
+        let path = init(&dir).unwrap();
+        assert_eq!(path, dir.join(CONFIG_PATH));
+        assert_eq!(load(&dir).unwrap(), Config::default());
+    }
+
+    #[test]
+    fn init_refuses_to_overwrite() {
+        let dir = scratch("init-twice");
+        std::fs::create_dir_all(dir.join(".tickets")).unwrap();
+        std::fs::write(dir.join(CONFIG_PATH), r#"statuses = ["backlog"]"#).unwrap();
+        let err = init(&dir).unwrap_err();
+        assert!(err.contains("already exists"), "{err}");
+        assert_eq!(load(&dir).unwrap().custom_statuses(), [custom("backlog")]);
+    }
+
+    #[test]
+    fn load_reads_existing_config_from_an_ancestor() {
+        let dir = scratch("ancestor");
+        std::fs::create_dir_all(dir.join(".tickets")).unwrap();
+        std::fs::write(dir.join(CONFIG_PATH), r#"statuses = ["backlog"]"#).unwrap();
+        let nested = dir.join("a/b");
+        std::fs::create_dir_all(&nested).unwrap();
+        let config = load(&nested).unwrap();
+        assert_eq!(config.custom_statuses(), [custom("backlog")]);
+        assert!(!nested.join(".tickets").exists());
+    }
+
+    #[test]
+    fn load_reports_invalid_config_with_its_path() {
+        let dir = scratch("invalid");
+        std::fs::create_dir_all(dir.join(".tickets")).unwrap();
+        std::fs::write(dir.join(CONFIG_PATH), "statuses = []").unwrap();
+        let err = load(&dir).unwrap_err();
+        assert!(err.contains("config.toml"), "{err}");
     }
 
     #[test]
