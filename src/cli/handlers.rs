@@ -4,7 +4,7 @@ use crate::config::Config;
 use crate::domain::id::ID;
 use crate::domain::query::Filter;
 use crate::domain::store;
-use crate::domain::tickets::{NewTicket, Ticket};
+use crate::domain::tickets::{Change, NewTicket, SetFields, Ticket};
 use std::path::Path;
 
 /// Runs every command except `init`, which needs no existing config.
@@ -54,6 +54,41 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             Ok(())
         }
         Command::Edit { id } => edit(root, config, id),
+        Command::Tag { id, tags } => modify(root, config, id, Change::AddTags(tags)),
+        Command::Untag { id, tags } => modify(root, config, id, Change::RemoveTags(tags)),
+        Command::Block { id, blockers } => modify(root, config, id, Change::AddBlockers(blockers)),
+        Command::Unblock { id, blockers } => {
+            modify(root, config, id, Change::RemoveBlockers(blockers))
+        }
+        Command::Set {
+            id,
+            title,
+            status,
+            r#type,
+            clear_type,
+            parent,
+            clear_parent,
+        } => {
+            let fields = SetFields {
+                title,
+                status,
+                r#type: if clear_type {
+                    Some(None)
+                } else {
+                    r#type.map(Some)
+                },
+                parent: if clear_parent {
+                    Some(None)
+                } else {
+                    parent.map(Some)
+                },
+            };
+            if fields.is_empty() {
+                return Err("nothing to set; pass at least one field".to_string());
+            }
+            modify(root, config, id, Change::Set(fields))
+        }
+        Command::Note { id, text } => modify(root, config, id, Change::AppendNote(text)),
         _ => Err("not implemented yet".to_string()),
     }
 }
@@ -71,6 +106,28 @@ fn now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
+}
+
+/// Applies `change` to the ticket and saves it, if it changed anything.
+fn modify(root: &Path, config: &Config, id: ID, change: Change) -> Result<(), String> {
+    let ticket = store::read(root, id)?.ok_or_else(|| format!("no ticket with ID {id}"))?;
+    save_revision(root, config, &ticket, ticket.apply(change))
+}
+
+/// Validates `edited` against `ticket` and writes it if it differs.
+fn save_revision(
+    root: &Path,
+    config: &Config,
+    ticket: &Ticket,
+    edited: Ticket,
+) -> Result<(), String> {
+    match ticket.revise(edited, config, now())? {
+        Some(revised) => {
+            ensure_exist(root, revised.parent.iter().chain(&revised.blocked_by))?;
+            store::replace(root, &revised)
+        }
+        None => Ok(()),
+    }
 }
 
 /// Runs `$VISUAL` (or `$EDITOR`) on a temporary file holding `text` and returns
@@ -99,13 +156,7 @@ fn edit_text(id: ID, text: &str) -> Result<String, String> {
 fn edit(root: &Path, config: &Config, id: ID) -> Result<(), String> {
     let ticket = store::read(root, id)?.ok_or_else(|| format!("no ticket with ID {id}"))?;
     let edited: Ticket = edit_text(id, &ticket.to_string())?.parse()?;
-    match ticket.revise(edited, config, now())? {
-        Some(revised) => {
-            ensure_exist(root, revised.parent.iter().chain(&revised.blocked_by))?;
-            store::replace(root, &revised)
-        }
-        None => Ok(()),
-    }
+    save_revision(root, config, &ticket, edited)
 }
 
 /// Creates a ticket under `root` and returns its ID.

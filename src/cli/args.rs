@@ -57,42 +57,46 @@ pub enum Command {
     Edit { id: ID },
     /// Set scalar fields
     Set {
-        id: String,
+        id: ID,
         #[arg(long)]
         title: Option<String>,
         #[arg(long)]
-        status: Option<String>,
+        status: Option<Status>,
         #[arg(long)]
         r#type: Option<String>,
+        #[arg(long, conflicts_with = "type")]
+        clear_type: bool,
         #[arg(long)]
-        parent: Option<String>,
+        parent: Option<ID>,
+        #[arg(long, conflicts_with = "parent")]
+        clear_parent: bool,
     },
     /// Add tags
     Tag {
-        id: String,
+        id: ID,
         #[arg(required = true)]
         tags: Vec<String>,
     },
     /// Remove tags
     Untag {
-        id: String,
+        id: ID,
         #[arg(required = true)]
         tags: Vec<String>,
     },
     /// Add blockers
     Block {
-        id: String,
+        id: ID,
         #[arg(required = true)]
-        blockers: Vec<String>,
+        blockers: Vec<ID>,
     },
     /// Remove blockers
     Unblock {
-        id: String,
+        id: ID,
         #[arg(required = true)]
-        blockers: Vec<String>,
+        blockers: Vec<ID>,
     },
     /// Append text to the body
-    Note { id: String, text: String },
+    Note { id: ID, text: String },
     /// Archive a ticket (reversible)
     Archive { id: String },
     /// Restore an archived ticket

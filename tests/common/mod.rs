@@ -63,3 +63,17 @@ pub fn ticket_text(dir: &Path, id: &str) -> String {
 pub fn set_title(title: &str) -> String {
     format!("sed 's/^title: .*/title: {title}/' \"$1\" > \"$1.new\" && mv \"$1.new\" \"$1\"")
 }
+
+/// Sets the ticket's `updated_at` to 5 on disk and returns the new text, so a
+/// later rewrite is distinguishable from an untouched file.
+pub fn age_ticket(dir: &Path, id: &str) -> String {
+    let text = ticket_text(dir, id);
+    let old = text
+        .lines()
+        .find(|l| l.starts_with("updated_at: "))
+        .unwrap()
+        .to_string();
+    let aged = text.replace(&old, "updated_at: 5");
+    std::fs::write(dir.join(format!("tickets/all/{id}.md")), &aged).unwrap();
+    aged
+}
