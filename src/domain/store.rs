@@ -39,6 +39,29 @@ pub fn read(root: &Path, id: ID) -> Result<Option<Ticket>, String> {
     }
 }
 
+/// Every active ticket. A missing `tickets/all` directory means no tickets.
+pub fn list(root: &Path) -> Result<Vec<Ticket>, String> {
+    let dir = root.join("tickets/all");
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(format!("cannot read {}: {e}", dir.display())),
+    };
+    let mut tickets = Vec::new();
+    for entry in entries {
+        let path = entry
+            .map_err(|e| format!("cannot read {}: {e}", dir.display()))?
+            .path();
+        let text = std::fs::read_to_string(&path)
+            .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+        tickets.push(
+            text.parse()
+                .map_err(|e| format!("{}: {e}", path.display()))?,
+        );
+    }
+    Ok(tickets)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

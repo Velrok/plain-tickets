@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Stored in the front matter as 16 hex digits.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ID(pub u64);
 
 impl ID {
