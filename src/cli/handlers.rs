@@ -1,6 +1,8 @@
 use super::args::Command;
+use super::presenter::TicketCliLinePresenter;
 use crate::config::Config;
 use crate::domain::id::ID;
+use crate::domain::query::Filter;
 use crate::domain::store;
 use crate::domain::tickets::{NewTicket, Ticket};
 use std::path::Path;
@@ -28,6 +30,27 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             };
             let id = new(root, config, draft)?;
             println!("{id}");
+            Ok(())
+        }
+        Command::List {
+            status,
+            r#type,
+            tag,
+            parent,
+            blocked,
+            ready,
+        } => {
+            let filter = Filter {
+                status,
+                r#type,
+                tags: tag,
+                parent,
+                blocked,
+                ready,
+            };
+            for t in filter.select(store::list(root)?, config) {
+                println!("{}", TicketCliLinePresenter(&t));
+            }
             Ok(())
         }
         _ => Err("not implemented yet".to_string()),

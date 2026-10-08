@@ -37,22 +37,21 @@ pub enum Command {
     /// List tickets
     List {
         #[arg(short, long)]
-        status: Option<String>,
+        /// Repeatable; matches any
+        status: Vec<Status>,
         #[arg(short = 't', long)]
         r#type: Option<String>,
         #[arg(short = 'g', long)]
-        tag: Option<String>,
+        /// Repeatable; matches any
+        tag: Vec<String>,
         #[arg(short, long)]
-        parent: Option<String>,
+        parent: Option<ID>,
         /// Only tickets with unfinished blockers
         #[arg(long, conflicts_with = "ready")]
         blocked: bool,
         /// Only open tickets whose blockers are all done
         #[arg(long)]
         ready: bool,
-        /// Include archived tickets
-        #[arg(long)]
-        all: bool,
     },
     /// Open a ticket in $EDITOR
     Edit { id: String },
