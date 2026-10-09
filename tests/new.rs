@@ -68,3 +68,17 @@ fn new_rejects_an_unconfigured_status_without_writing() {
     assert!(stderr(&out).contains("blocked"), "{}", stderr(&out));
     assert!(!dir.join("tickets").exists());
 }
+
+#[test]
+fn new_help_explains_how_to_pass_a_message_starting_with_dashes() {
+    let dir = initialised("new-help-dashes");
+    let help = stdout(&tickets(&dir, &["new", "--help"]));
+    assert!(help.contains(r#"--message="--text""#), "{help}");
+}
+
+#[test]
+fn note_help_explains_how_to_pass_text_starting_with_dashes() {
+    let dir = initialised("note-help-dashes");
+    let help = stdout(&tickets(&dir, &["note", "--help"]));
+    assert!(help.contains("tickets note <ID> -- "), "{help}");
+}

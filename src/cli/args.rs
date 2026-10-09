@@ -22,6 +22,9 @@ pub enum Command {
     /// Create .tickets/config.toml with the default statuses
     Init,
     /// Create a ticket and print its ID
+    #[command(
+        after_help = "A message starting with dashes needs the joined form:\n  tickets new \"Title\" --message=\"--text\""
+    )]
     New {
         title: String,
         #[arg(short = 't', long)]
@@ -114,6 +117,9 @@ pub enum Command {
         blockers: Vec<ID>,
     },
     /// Append text to the body
+    #[command(
+        after_help = "Text starting with dashes goes after --:\n  tickets note <ID> -- \"--text\""
+    )]
     Note { id: ID, text: String },
     /// Archive a ticket (reversible)
     Archive { id: ID },
