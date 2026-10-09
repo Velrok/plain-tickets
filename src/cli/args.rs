@@ -38,7 +38,7 @@ pub enum Command {
         parent: Option<ID>,
         #[arg(short, long = "blocked-by")]
         blocked_by: Vec<ID>,
-        /// Body text; opens $EDITOR if omitted on a terminal
+        /// Body text; `-` reads it from STDIN; opens $EDITOR if omitted on a terminal
         #[arg(short, long)]
         message: Option<String>,
     },

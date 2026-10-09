@@ -10,6 +10,7 @@ use crate::domain::status::Status;
 use crate::domain::store;
 use crate::domain::tickets::{Change, NewTicket, SetFields, Ticket};
 use crate::domain::timestamp::Timestamp;
+use std::io::IsTerminal;
 use std::path::Path;
 
 /// Runs every command except `init`, which needs no existing config.
@@ -24,6 +25,8 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             blocked_by,
             message,
         } => {
+            let stdin = std::io::stdin();
+            let body = resolve_body(message, stdin.lock(), stdin.is_terminal())?;
             let draft = NewTicket {
                 title,
                 r#type,
@@ -31,7 +34,7 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
                 tags,
                 parent,
                 blocked_by,
-                body: message.unwrap_or_default(),
+                body,
             };
             let id = new(root, config, draft, ID::generate)?;
             println!("{id}");
@@ -277,6 +280,27 @@ fn edit(root: &Path, config: &Config, id: ID) -> Result<(), String> {
     save_revision(root, config, &ticket, edited)
 }
 
+/// The body for a new ticket: `-` reads all of `stdin`, which must not be a terminal.
+fn resolve_body(
+    message: Option<String>,
+    mut stdin: impl std::io::Read,
+    stdin_is_terminal: bool,
+) -> Result<String, String> {
+    match message.as_deref() {
+        Some("-") if stdin_is_terminal => {
+            Err("cannot read the body from STDIN: STDIN is a terminal; pipe the text in".into())
+        }
+        Some("-") => {
+            let mut body = String::new();
+            stdin
+                .read_to_string(&mut body)
+                .map_err(|e| format!("cannot read STDIN: {e}"))?;
+            Ok(body)
+        }
+        _ => Ok(message.unwrap_or_default()),
+    }
+}
+
 /// How many IDs to draw before giving up on finding a free one.
 const ID_ATTEMPTS: usize = 5;
 
@@ -339,5 +363,26 @@ mod tests {
         new(&root, &config, draft(), || ID(7)).unwrap();
         let err = new(&root, &config, draft(), || ID(7)).unwrap_err();
         assert!(err.contains("unique"), "{err}");
+    }
+
+    #[test]
+    fn dash_body_reads_stdin_to_the_end() {
+        let body = resolve_body(Some("-".into()), "a\nb\n".as_bytes(), false).unwrap();
+        assert_eq!(body, "a\nb\n");
+    }
+
+    #[test]
+    fn dash_body_on_a_terminal_is_an_error() {
+        let err = resolve_body(Some("-".into()), "".as_bytes(), true).unwrap_err();
+        assert!(err.contains("STDIN is a terminal"), "{err}");
+    }
+
+    #[test]
+    fn other_bodies_are_used_as_given_and_a_missing_one_is_empty() {
+        assert_eq!(
+            resolve_body(Some("x".into()), "".as_bytes(), false).unwrap(),
+            "x"
+        );
+        assert_eq!(resolve_body(None, "".as_bytes(), false).unwrap(), "");
     }
 }

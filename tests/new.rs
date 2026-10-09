@@ -97,3 +97,12 @@ fn new_stamps_created_and_updated_as_iso_8601_with_milliseconds() {
     assert!(iso("created_at"), "{text}");
     assert!(iso("updated_at"), "{text}");
 }
+
+#[test]
+fn new_reads_the_whole_body_from_stdin_with_dash() {
+    let dir = initialised("stdin-body");
+    let out = tickets_stdin(&dir, &["new", "Piped", "-m", "-"], "Line one\n\nLine two\n");
+    assert!(out.status.success(), "{}", stderr(&out));
+    let text = ticket_text(&dir, &stdout(&out));
+    assert!(text.ends_with("Line one\n\nLine two\n"), "{text}");
+}

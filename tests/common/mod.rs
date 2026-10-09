@@ -87,3 +87,24 @@ pub fn tickets_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
         .output()
         .unwrap()
 }
+
+/// Like `tickets`, with `input` piped to STDIN.
+pub fn tickets_stdin(dir: &Path, args: &[&str], input: &str) -> Output {
+    use std::io::Write;
+    use std::process::Stdio;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_tickets"))
+        .args(args)
+        .current_dir(dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.as_bytes())
+        .unwrap();
+    child.wait_with_output().unwrap()
+}
