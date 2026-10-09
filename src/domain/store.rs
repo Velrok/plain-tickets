@@ -1,5 +1,6 @@
 use super::id::{ID, IdPrefix};
 use super::tickets::Ticket;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 fn path(root: &Path, id: ID) -> PathBuf {
@@ -11,7 +12,13 @@ pub fn create(root: &Path, ticket: &Ticket) -> Result<PathBuf, String> {
     use std::io::Write;
 
     let path = path(root, ticket.id);
-    let dir = path.parent().expect("ticket path has a parent");
+    let dir = path.parent    // Sync through the writing handle: Windows refuses to fsync a read-only one.
+    let written = std::fs::File::create(&tmp)
+        .and_then(|mut file| {
+            file.write_all(ticket.to_string().as_bytes())?;
+            file.sync_all()
+        })
+        .and_then(|()| std::fs::rename(&tmp, &path));.expect("ticket path has a parent");
     std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
     let mut file = std::fs::OpenOptions::new()
         .write(true)
