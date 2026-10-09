@@ -1,5 +1,5 @@
 use super::args::Command;
-use super::presenter::TicketCliLinePresenter;
+use super::presenter::{TicketCliDetailPresenter, TicketCliLinePresenter};
 use crate::config::Config;
 use crate::domain::id::ID;
 use crate::domain::query::Filter;
@@ -93,6 +93,10 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
                 return Err("nothing to set; pass at least one field".to_string());
             }
             modify(root, config, id, Change::Set(fields))
+        }
+        Command::Show { id } => {
+            println!("{}", TicketCliDetailPresenter(&store::find(root, id)?));
+            Ok(())
         }
         Command::Archive { id } => archive(root, id),
         Command::Unarchive { id } => store::unarchive(root, id),

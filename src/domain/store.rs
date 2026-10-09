@@ -28,7 +28,18 @@ pub fn create(root: &Path, ticket: &Ticket) -> Result<PathBuf, String> {
 
 /// The active ticket with this ID, or `None` if there is no such file.
 pub fn read(root: &Path, id: ID) -> Result<Option<Ticket>, String> {
-    let path = path(root, id);
+    read_file(&path(root, id))
+}
+
+/// The ticket with this ID, active or archived. For read-only commands.
+pub fn find(root: &Path, id: ID) -> Result<Ticket, String> {
+    if let Some(ticket) = read(root, id)? {
+        return Ok(ticket);
+    }
+    read_file(&archived_path(root, id))?.ok_or_else(|| not_found(root, id))
+}
+
+fn read_file(path: &Path) -> Result<Option<Ticket>, String> {
     match std::fs::read_to_string(&path) {
         Ok(text) => text
             .parse()

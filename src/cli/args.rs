@@ -33,7 +33,7 @@ pub enum Command {
         message: Option<String>,
     },
     /// Print a ticket's front matter and body
-    Show { id: String },
+    Show { id: ID },
     /// List tickets
     List {
         #[arg(short, long)]

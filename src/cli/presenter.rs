@@ -11,6 +11,17 @@ impl fmt::Display for TicketCliLinePresenter<'_> {
     }
 }
 
+/// The ticket as stored: front matter, then body. Has no trailing newline, so
+/// printing it with `println!` ends the output with exactly one.
+pub struct TicketCliDetailPresenter<'a>(pub &'a Ticket);
+
+impl fmt::Display for TicketCliDetailPresenter<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let text = self.0.to_string();
+        f.write_str(text.strip_suffix('\n').unwrap_or(&text))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
