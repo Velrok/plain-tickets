@@ -16,7 +16,7 @@ Markdown tickets with YAML front matter, one file per ticket.
   - `-p, --parent <id>` (must exist)
   - `-b, --blocked-by <id>` (repeatable, must exist)
   - `-m, --message <text>` body
-- [ ] `tickets show <id>` — print front matter and body
+- [x] `tickets show <id>` — print front matter and body (active or archived; the stored file text)
 - [x] `tickets list` — one line per ticket: `<id>\t<status>\t<title>`
   - [x] `-s, --status <status>` (repeatable, matches any)
   - [x] `-g, --tag <tag>` (repeatable, matches any)
