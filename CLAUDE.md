@@ -52,3 +52,38 @@ First time only: `tickets init` creates `.tickets/config.toml`. Statuses are
   `cargo fmt --check` is clean and `cargo clippy --all-targets -- -D warnings`
   passes (CI enforces the last two).
 - Keep the `README.md` checklist in step with the commands.
+
+## Releasing
+
+Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. CI (`ci.yml`) runs
+on pushes to `main` only (it ignores `tickets/**`, `docs/**`, `*.md`).
+
+1. Write the release notes in `docs/releases/vX.Y.Z.md` (the workflow uses the
+   file as the GitHub release body and fails early if it is missing).
+1. Bump `version` in `Cargo.toml` (and let `Cargo.lock` update), then commit
+   notes and bump (`chore: bump version to X.Y.Z`).
+1. Make sure `main` is green: `cargo test`, `cargo fmt --check`,
+   `cargo clippy --all-targets -- -D warnings`.
+1. Push `main` first, then tag that commit (tags here must be annotated):
+   `git push origin main && git tag -m vX.Y.Z vX.Y.Z && git push origin vX.Y.Z`.
+1. Watch it: `gh run watch` (the release appears under GitHub Releases).
+
+What the workflow does:
+
+| Job | Does |
+| --- | --- |
+| `check-tag` | Fails if the tag differs from the `Cargo.toml` version (`scripts/check-release-tag.sh`) or `docs/releases/<tag>.md` is missing |
+| `build` | Matrix of 4 targets; runs `cargo test --release` (except x86_64 macOS, which is cross-built), builds, packages |
+| `release` | Downloads all archives, publishes a GitHub Release with `docs/releases/<tag>.md` as the body |
+
+Assets: `tickets-linux-x86_64.tar.gz`, `tickets-macos-arm64.tar.gz`,
+`tickets-macos-x86_64.tar.gz`, `tickets-windows-x86_64.zip`.
+
+Gotchas:
+
+- A tag/version mismatch fails fast. Fix the version, delete the tag
+  (`git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z`), then re-tag.
+- Push the bump commit **before** the tag, and tag that commit (or a later
+  one). Tagging an earlier commit fails `check-tag` (v0.2.0 did).
+- The release does not wait for `ci.yml`; check CI yourself before tagging.
+- `tickets --version` shows `X.Y.Z (<short sha>)`, taken from git at build time.
