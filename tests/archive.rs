@@ -69,14 +69,10 @@ fn commands_say_a_ticket_is_archived_when_it_is_in_the_archive() {
 #[test]
 fn unknown_tickets_are_not_called_archived() {
     let dir = initialised("archive-unknown");
-    let out = tickets(&dir, &["archive", "00000000000000ff"]);
+    let out = tickets(&dir, &["archive", "00000000000ff"]);
     assert!(!out.status.success());
     assert!(!stderr(&out).contains("archived"), "{}", stderr(&out));
-    assert!(
-        stderr(&out).contains("00000000000000ff"),
-        "{}",
-        stderr(&out)
-    );
+    assert!(stderr(&out).contains("00000000000ff"), "{}", stderr(&out));
 }
 
 #[test]
@@ -96,7 +92,7 @@ fn unarchive_restores_the_ticket_byte_for_byte() {
 fn unarchive_fails_for_tickets_that_are_not_archived() {
     let dir = initialised("unarchive-missing");
     let active_id = new_id(&dir, &["Active"]);
-    for id in [active_id.as_str(), "00000000000000ff"] {
+    for id in [active_id.as_str(), "00000000000ff"] {
         let out = tickets(&dir, &["unarchive", id]);
         assert!(!out.status.success(), "{id}");
         assert!(stderr(&out).contains(id), "{id}: {}", stderr(&out));

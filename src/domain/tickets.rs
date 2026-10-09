@@ -274,11 +274,11 @@ mod tests {
     }
 
     #[test]
-    fn stores_ids_as_sixteen_digit_hex() {
+    fn stores_ids_as_thirteen_character_base36() {
         let mut t = ticket("");
         t.id = ID(0xab);
         let text = t.to_string();
-        assert!(text.contains("id: 00000000000000ab"), "{text}");
+        assert!(text.contains("id: 000000000004r"), "{text}");
     }
 
     #[test]

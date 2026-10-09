@@ -1,0 +1,16 @@
+---
+id: 16utbc9j3f6jp
+title: list order is arbitrary for tickets created in the same second
+type: bug
+status: done
+parent: null
+blocked_by: []
+tags:
+- cli
+created_at: 2026-10-09T00:04:14.000Z
+updated_at: 2026-10-09T00:55:25.000Z
+---
+
+created_at has one-second resolution, so ties fall back to the random ID. Seen while creating 15 tickets in a loop: list printed them in no sensible order. Options: store created_at with finer resolution, or break ties differently.
+
+Fixed by making new IDs time-ordered instead of changing created_at: ID::generate (was ID::rand) is the millisecond clock in the top 48 bits plus 16 random bits. The existing sort key (status, created_at, id) then keeps creation order within a second. No file-format change; existing tickets keep their IDs and old ties stay arbitrary. Trade-off: two tickets in the same millisecond tie-break randomly, and collide with chance 1 in 65536 (create refuses to overwrite, so it errors rather than corrupts). Removed the rand_ids_differ test, which could now fail by chance.

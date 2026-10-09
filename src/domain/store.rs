@@ -26,6 +26,11 @@ pub fn create(root: &Path, ticket: &Ticket) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// Whether an active or archived ticket already has this ID.
+pub fn exists(root: &Path, id: ID) -> bool {
+    path(root, id).exists() || archived_path(root, id).exists()
+}
+
 /// The active ticket with this ID, or `None` if there is no such file.
 pub fn read(root: &Path, id: ID) -> Result<Option<Ticket>, String> {
     read_file(&path(root, id))
@@ -171,7 +176,7 @@ mod tests {
     fn created_ticket_is_stored_under_tickets_all_and_reads_back() {
         let root = scratch("create");
         let path = create(&root, &ticket(0xab)).unwrap();
-        assert_eq!(path, root.join("tickets/all/00000000000000ab.md"));
+        assert_eq!(path, root.join("tickets/all/000000000004r.md"));
         assert_eq!(
             read(&root, ID(0xab)).unwrap().unwrap().to_string(),
             ticket(0xab).to_string()

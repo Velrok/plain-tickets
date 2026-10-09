@@ -153,7 +153,7 @@ fn pretty_list_prints_a_header_and_aligned_columns() {
         lines[0],
         format!(
             "ID{}STATUS{}TYPE{}TITLE",
-            " ".repeat(16),
+            " ".repeat(13),
             " ".repeat(10),
             " ".repeat(4)
         )

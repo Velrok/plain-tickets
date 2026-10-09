@@ -200,7 +200,7 @@ mod tests {
         let ticket = ticket(0xab, "in progress", None, "Fix it");
         assert_eq!(
             PlainLinePresenter(&ticket).to_string(),
-            "00000000000000ab\tin progress\t\tFix it"
+            "000000000004r\tin progress\t\tFix it"
         );
     }
 
@@ -236,7 +236,7 @@ mod tests {
         let ticket = ticket(0xab, "todo", None, "Fix it");
         assert_eq!(
             detail(&ticket),
-            "Fix it\n00000000000000ab · ⚪ todo\n📅 Created 1970-01-01 · Updated 1970-01-01"
+            "Fix it\n000000000004r · ⚪ todo\n📅 Created 1970-01-01 · Updated 1970-01-01"
         );
     }
 
@@ -248,7 +248,7 @@ mod tests {
         ticket.updated_at = "2026-10-10T10:12:38Z".parse().unwrap();
         assert_eq!(
             detail(&ticket),
-            "Fix it\n00000000000000ab · 🐛 bug · 🟡 in progress · #cli #x\n📅 Created 2026-10-09 · Updated 2026-10-10"
+            "Fix it\n000000000004r · 🐛 bug · 🟡 in progress · #cli #x\n📅 Created 2026-10-09 · Updated 2026-10-10"
         );
     }
 
@@ -279,10 +279,10 @@ mod tests {
         assert_eq!(
             shown,
             "Fix it\n\
-             00000000000000ab · ⚪ todo\n\
-             📁 Parent: 0000000000000001 The epic [🟡 in progress]\n\
-             ⛔ Blocked by: 0000000000000002 First [✅ done]\n\
-             \x20              0000000000000003 (not found)\n\
+             000000000004r · ⚪ todo\n\
+             📁 Parent: 0000000000001 The epic [🟡 in progress]\n\
+             ⛔ Blocked by: 0000000000002 First [✅ done]\n\
+             \x20              0000000000003 (not found)\n\
              📅 Created 1970-01-01 · Updated 1970-01-01"
         );
     }
@@ -294,7 +294,7 @@ mod tests {
         assert_eq!(
             detail(&ticket),
             format!(
-                "Fix it\n00000000000000ab · ⚪ todo\n📅 Created 1970-01-01 · Updated 1970-01-01\n{}\n# Heading\n\nSome *body*",
+                "Fix it\n000000000004r · ⚪ todo\n📅 Created 1970-01-01 · Updated 1970-01-01\n{}\n# Heading\n\nSome *body*",
                 "─".repeat(40)
             )
         );
@@ -344,7 +344,7 @@ mod tests {
             lines[0],
             format!(
                 "ID{}STATUS{}TYPE{}TITLE",
-                " ".repeat(16),
+                " ".repeat(13),
                 " ".repeat(10),
                 " ".repeat(5)
             )
@@ -352,19 +352,15 @@ mod tests {
         assert_eq!(
             lines[1],
             format!(
-                "0000000000000001  ⚪ todo{}🐛 bug{}A",
+                "0000000000001  ⚪ todo{}🐛 bug{}A",
                 " ".repeat(9),
                 " ".repeat(3)
             )
         );
-        assert_eq!(lines[2], "0000000000000002  🟡 in progress  🧩 task  B");
+        assert_eq!(lines[2], "0000000000002  🟡 in progress  🧩 task  B");
         assert_eq!(
             lines[3],
-            format!(
-                "0000000000000003  ✅ done{}{}C",
-                " ".repeat(9),
-                " ".repeat(9)
-            )
+            format!("0000000000003  ✅ done{}{}C", " ".repeat(9), " ".repeat(9))
         );
     }
 
@@ -381,8 +377,8 @@ mod tests {
         }
         .to_string();
         let lines: Vec<&str> = table.lines().collect();
-        assert_eq!(lines[1], "0000000000000001  ⚪ todo  🐛 bug  A");
-        assert_eq!(lines[2], "0000000000000002  ⚪ todo  misc    B");
+        assert_eq!(lines[1], "0000000000001  ⚪ todo  🐛 bug  A");
+        assert_eq!(lines[2], "0000000000002  ⚪ todo  misc    B");
     }
 
     #[test]
@@ -420,11 +416,11 @@ mod tests {
         .to_string();
         let lines: Vec<&str> = table.lines().collect();
         // Row 1 holds two emoji, each two columns wide but one char.
-        assert_eq!(lines[1], "0000000000000001  ⚪ todo  🐛 bug  A ve…");
+        assert_eq!(lines[1], "0000000000001  ⚪ todo  🐛 bug  A very …");
         assert_eq!(lines[1].chars().count() + 2, 40);
         assert_eq!(
             lines[2],
-            format!("0000000000000002  ⚪ todo{}Short", " ".repeat(10))
+            format!("0000000000002  ⚪ todo{}Short", " ".repeat(10))
         );
     }
 

@@ -22,7 +22,7 @@ fn note_appends_after_a_blank_line_to_an_existing_body() {
 #[test]
 fn modifying_an_unknown_ticket_fails_naming_the_id() {
     let dir = initialised("modify-unknown");
-    let ghost = "00000000000000ff";
+    let ghost = "00000000000ff";
     for args in [["note", ghost, "x"], ["tag", ghost, "x"]] {
         let out = tickets(&dir, &args);
         assert!(!out.status.success(), "{args:?}");
@@ -115,7 +115,7 @@ fn block_rejects_unknown_blockers_and_self_blocking() {
     let dir = initialised("block-reject");
     let id = new_id(&dir, &["Fix it"]);
     let aged = age_ticket(&dir, &id);
-    let ghost = "00000000000000ff";
+    let ghost = "00000000000ff";
     let out = tickets(&dir, &["block", &id, ghost]);
     assert!(!out.status.success());
     assert!(stderr(&out).contains(ghost), "{}", stderr(&out));
@@ -216,7 +216,7 @@ fn set_rejects_invalid_values_and_leaves_the_ticket_untouched() {
     let cases: [(&[&str], &str); 4] = [
         (&["--title", "  "], "title"),
         (&["--status", "blocked"], "blocked"),
-        (&["--parent", "00000000000000ff"], "00000000000000ff"),
+        (&["--parent", "00000000000ff"], "00000000000ff"),
         (&["--parent", &id], "own parent"),
     ];
     for (flags, needle) in cases {

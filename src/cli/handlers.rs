@@ -32,7 +32,7 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
                 blocked_by,
                 body: message.unwrap_or_default(),
             };
-            let id = new(root, config, draft)?;
+            let id = new(root, config, draft, ID::generate)?;
             println!("{id}");
             Ok(())
         }
@@ -217,10 +217,67 @@ fn edit(root: &Path, config: &Config, id: ID) -> Result<(), String> {
     save_revision(root, config, &ticket, edited)
 }
 
-/// Creates a ticket under `root` and returns its ID.
-fn new(root: &Path, config: &Config, draft: NewTicket) -> Result<ID, String> {
+/// How many IDs to draw before giving up on finding a free one.
+const ID_ATTEMPTS: usize = 5;
+
+/// Creates a ticket under `root` with the first free ID from `next_id`.
+fn new(
+    root: &Path,
+    config: &Config,
+    draft: NewTicket,
+    mut next_id: impl FnMut() -> ID,
+) -> Result<ID, String> {
     ensure_exist(root, draft.parent.iter().chain(&draft.blocked_by))?;
-    let ticket = Ticket::new(draft, config, ID::generate(), Timestamp::now())?;
+    let id = (0..ID_ATTEMPTS)
+        .map(|_| next_id())
+        .find(|id| !store::exists(root, *id))
+        .ok_or("could not find a unique ticket ID")?;
+    let ticket = Ticket::new(draft, config, id, Timestamp::now())?;
     store::create(root, &ticket)?;
     Ok(ticket.id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn draft() -> NewTicket {
+        NewTicket {
+            title: "Fix it".into(),
+            r#type: None,
+            status: None,
+            tags: vec![],
+            parent: None,
+            blocked_by: vec![],
+            body: String::new(),
+        }
+    }
+
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("tickets-new-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn new_draws_another_id_when_one_is_taken_by_an_active_or_archived_ticket() {
+        let root = scratch("collision");
+        let config = Config::default();
+        new(&root, &config, draft(), || ID(1)).unwrap();
+        new(&root, &config, draft(), || ID(2)).unwrap();
+        store::archive(&root, ID(2)).unwrap();
+        let mut ids = [1, 2, 3].map(ID).into_iter();
+        let id = new(&root, &config, draft(), || ids.next().unwrap()).unwrap();
+        assert_eq!(id, ID(3));
+    }
+
+    #[test]
+    fn new_gives_up_after_a_few_taken_ids() {
+        let root = scratch("giveup");
+        let config = Config::default();
+        new(&root, &config, draft(), || ID(7)).unwrap();
+        let err = new(&root, &config, draft(), || ID(7)).unwrap_err();
+        assert!(err.contains("unique"), "{err}");
+    }
 }

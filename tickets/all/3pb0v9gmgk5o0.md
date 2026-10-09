@@ -1,0 +1,16 @@
+---
+id: 3pb0v9gmgk5o0
+title: Add --format flag and output mode selection
+type: task
+status: done
+parent: 3a38v7oybcjd3
+blocked_by: []
+tags:
+- cli
+created_at: 2026-10-09T00:18:31.000Z
+updated_at: 2026-10-09T00:20:01.000Z
+---
+
+Add a format option (plain or pretty) on list and show. Default pretty if stdout is a TTY, else plain. NO_COLOR disables colour only. Plain output unchanged.
+
+Done: Format enum and --format on list/show (src/cli/args.rs), mode resolution in src/cli/output.rs (resolve is pure and unit-tested; current reads the TTY and NO_COLOR). Both formats still print plain; the pretty tickets read Mode.format and Mode.colour and should drop the cfg_attr expect(dead_code) on Mode.

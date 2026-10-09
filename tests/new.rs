@@ -5,7 +5,7 @@ use common::*;
 fn new_prints_the_id_and_writes_the_ticket() {
     let dir = initialised("basic");
     let id = new_id(&dir, &["Fix it", "-m", "Some body", "-g", "a", "-g", "a"]);
-    assert_eq!(id.len(), 16, "{id}");
+    assert_eq!(id.len(), 13, "{id}");
     let text = std::fs::read_to_string(dir.join(format!("tickets/all/{id}.md"))).unwrap();
     assert!(text.contains("title: Fix it"), "{text}");
     assert!(text.contains("status: todo"), "{text}");
@@ -26,7 +26,7 @@ fn new_accepts_existing_parent_and_blockers() {
 #[test]
 fn new_rejects_unknown_parent_and_blockers_without_writing() {
     let dir = initialised("unknown");
-    let ghost = "00000000000000ff";
+    let ghost = "00000000000ff";
     for flag in ["-p", "-b"] {
         let out = tickets(&dir, &["new", "Child", flag, ghost]);
         assert!(!out.status.success());

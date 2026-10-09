@@ -37,13 +37,9 @@ fn show_finds_archived_tickets() {
 #[test]
 fn show_of_an_unknown_ticket_fails_naming_the_id_without_output() {
     let dir = initialised("show-unknown");
-    let out = tickets(&dir, &["show", "00000000000000ff"]);
+    let out = tickets(&dir, &["show", "00000000000ff"]);
     assert!(!out.status.success());
-    assert!(
-        stderr(&out).contains("00000000000000ff"),
-        "{}",
-        stderr(&out)
-    );
+    assert!(stderr(&out).contains("00000000000ff"), "{}", stderr(&out));
     assert_eq!(raw_stdout(&out), "");
 }
 

@@ -1,0 +1,24 @@
+---
+id: 00w41r9urdj2e
+title: Add a deps-graph command for the dependency forest
+type: feature
+status: todo
+parent: null
+blocked_by: []
+tags:
+- graph
+created_at: 2026-10-09T01:06:40.000Z
+updated_at: 2026-10-09T01:10:33.000Z
+---
+
+## Problem
+
+The old implementation in `../main` has `deps-graph`: the full dependency forest, with each blocker's blockees indented under it (`src/deps_graph.rs`). Not ported.
+
+## Acceptance (to refine before starting)
+
+- `tickets deps-graph` prints the forest from `blocked_by`, including archived blockers.
+- Cycles are reported, not a hang.
+- Unreadable tickets warn on stderr instead of vanishing (a bug fixed late in the old code).
+- Works when piped (the old code panicked there).
+- Integration tests; README updated.

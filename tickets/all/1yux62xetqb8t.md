@@ -1,0 +1,16 @@
+---
+id: 1yux62xetqb8t
+title: Add icon mappings for common types and statuses
+type: task
+status: done
+parent: null
+blocked_by: []
+tags:
+- cli
+created_at: 2026-10-09T00:52:50.000Z
+updated_at: 2026-10-09T00:53:08.000Z
+---
+
+Types: chore, epic, story, spike, research, docs, refactor, test, incident, idea. Statuses: open, backlog, doing, in review, blocked, testing, qa, on hold, waiting, duplicate, won't do. Single-codepoint emoji only. Lives in Style, so list and show both pick them up. No new colours.
+
+Done in src/cli/style.rs. Types: chore, epic, story, spike/research, docs, refactor, test, incident, idea. Statuses: open/backlog, doing, in review, blocked, testing/qa, on hold/waiting, duplicate, won't do. Tests that used chore and blocked as 'unknown' now use misc and triaged. Colours unchanged.

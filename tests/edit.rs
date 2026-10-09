@@ -60,13 +60,9 @@ fn edit_without_changes_leaves_the_file_untouched() {
 #[test]
 fn edit_of_an_unknown_ticket_fails_without_starting_the_editor() {
     let dir = initialised("edit-unknown");
-    let out = tickets_editing(&dir, &["edit", "00000000000000ff"], "touch editor-ran");
+    let out = tickets_editing(&dir, &["edit", "00000000000ff"], "touch editor-ran");
     assert!(!out.status.success());
-    assert!(
-        stderr(&out).contains("00000000000000ff"),
-        "{}",
-        stderr(&out)
-    );
+    assert!(stderr(&out).contains("00000000000ff"), "{}", stderr(&out));
     assert!(!dir.join("editor-ran").exists());
 }
 
@@ -76,7 +72,7 @@ fn edit_rejects_changes_to_id_and_created_at_and_keeps_the_original() {
     let id = new_id(&dir, &["Keep me"]);
     let original = ticket_text(&dir, &id);
     for (field, value) in [
-        ("id", "1234567890abcdef"),
+        ("id", "1234567890abc"),
         ("created_at", "2000-01-01T00:00:00.000Z"),
     ] {
         let editor = format!(
@@ -123,7 +119,7 @@ fn edit_rejects_broken_front_matter() {
 
 #[test]
 fn edit_rejects_a_parent_or_blocker_that_does_not_exist() {
-    let ghost = "00000000000000ff";
+    let ghost = "00000000000ff";
     let parent =
         format!("sed 's/^parent: .*/parent: {ghost}/' \"$1\" > \"$1.new\" && mv \"$1.new\" \"$1\"");
     assert_rejected("edit-parent", &parent, ghost);
