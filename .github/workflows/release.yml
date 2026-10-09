@@ -10,7 +10,18 @@ env:
   BIN_NAME: tickets
 
 jobs:
+  check-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check the tag matches the Cargo.toml version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: sh scripts/check-release-tag.sh "$TAG"
+
   build:
+    needs: check-tag
     strategy:
       fail-fast: false
       matrix:
