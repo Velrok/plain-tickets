@@ -6,6 +6,7 @@ use super::presenter::{
 use crate::config::Config;
 use crate::domain::id::ID;
 use crate::domain::query::Filter;
+use crate::domain::status::Status;
 use crate::domain::store;
 use crate::domain::tickets::{Change, NewTicket, SetFields, Ticket};
 use crate::domain::timestamp::Timestamp;
@@ -140,7 +141,18 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             }
             Ok(())
         }
-        Command::Archive { id } => archive(root, id),
+        Command::Archive { ids, all_rejected } => {
+            let ids = if all_rejected {
+                store::list(root)?
+                    .into_iter()
+                    .filter(|t| t.status == Status::Rejected)
+                    .map(|t| t.id)
+                    .collect()
+            } else {
+                ids
+            };
+            archive(root, ids)
+        }
         Command::Unarchive { id } => store::unarchive(root, id),
         Command::Note { id, text } => modify(root, config, id, Change::AppendNote(text)),
         Command::Init => unreachable!("main handles init before loading the config"),
@@ -190,16 +202,26 @@ fn save_revision(
     }
 }
 
-/// Archives a done or rejected ticket.
-fn archive(root: &Path, id: ID) -> Result<(), String> {
-    let ticket = store::require(root, id)?;
-    if !ticket.status.is_terminal() {
-        return Err(format!(
-            "cannot archive {id}: status '{}' is not done or rejected",
-            ticket.status
-        ));
+/// Archives done or rejected tickets. Every ID is checked before any ticket moves.
+fn archive(root: &Path, ids: Vec<ID>) -> Result<(), String> {
+    let mut unique = Vec::new();
+    for id in ids {
+        if !unique.contains(&id) {
+            unique.push(id);
+        }
     }
-    store::archive(root, id)
+    for id in &unique {
+        let ticket = store::require(root, *id)?;
+        if !ticket.status.is_terminal() {
+            return Err(format!(
+                "cannot archive {id}: status '{}' is not done or rejected",
+                ticket.status
+            ));
+        }
+    }
+    unique
+        .into_iter()
+        .try_for_each(|id| store::archive(root, id))
 }
 
 /// Runs `$VISUAL` (or `$EDITOR`) on a temporary file holding `text` and returns

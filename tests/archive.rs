@@ -139,3 +139,66 @@ fn archiving_a_finished_blocker_does_not_block_its_dependants() {
     assert_eq!(listed(&dir, &["--ready"]), ["Dependant"]);
     assert!(listed(&dir, &["--blocked"]).is_empty());
 }
+
+#[test]
+fn archive_takes_several_ids() {
+    let dir = initialised("archive-many");
+    let a = new_id(&dir, &["One", "-s", "done"]);
+    let b = new_id(&dir, &["Two", "-s", "rejected"]);
+    let out = tickets(&dir, &["archive", &a, &b]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(archived(&dir, &a).is_file());
+    assert!(archived(&dir, &b).is_file());
+}
+
+#[test]
+fn archive_moves_nothing_when_any_id_is_invalid() {
+    let dir = initialised("archive-all-or-nothing");
+    let good = new_id(&dir, &["Finished", "-s", "done"]);
+    let open = new_id(&dir, &["Still going"]);
+    for bad in [open.as_str(), "00000000000ff"] {
+        let out = tickets(&dir, &["archive", &good, bad]);
+        assert!(!out.status.success(), "{bad}");
+        assert!(active(&dir, &good).is_file(), "{bad}");
+        assert!(!archived(&dir, &good).exists(), "{bad}");
+    }
+}
+
+#[test]
+fn all_rejected_archives_every_rejected_ticket_and_nothing_else() {
+    let dir = initialised("archive-all-rejected");
+    let r1 = new_id(&dir, &["Nope one", "-s", "rejected"]);
+    let r2 = new_id(&dir, &["Nope two", "-s", "rejected"]);
+    let done = new_id(&dir, &["Finished", "-s", "done"]);
+    let open = new_id(&dir, &["Open"]);
+    let out = tickets(&dir, &["archive", "--all-rejected"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(archived(&dir, &r1).is_file());
+    assert!(archived(&dir, &r2).is_file());
+    assert!(active(&dir, &done).is_file());
+    assert!(active(&dir, &open).is_file());
+}
+
+#[test]
+fn all_rejected_succeeds_when_there_is_nothing_to_archive() {
+    let dir = initialised("archive-all-rejected-none");
+    new_id(&dir, &["Open"]);
+    assert!(
+        tickets(&dir, &["archive", "--all-rejected"])
+            .status
+            .success()
+    );
+}
+
+#[test]
+fn all_rejected_conflicts_with_ids_and_archive_needs_one_or_the_other() {
+    let dir = initialised("archive-all-rejected-conflict");
+    let id = new_id(&dir, &["Nope", "-s", "rejected"]);
+    assert!(
+        !tickets(&dir, &["archive", "--all-rejected", &id])
+            .status
+            .success()
+    );
+    assert!(!tickets(&dir, &["archive"]).status.success());
+    assert!(active(&dir, &id).is_file());
+}

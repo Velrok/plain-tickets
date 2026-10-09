@@ -34,5 +34,6 @@ Markdown tickets with YAML front matter, one file per ticket.
 - [x] `tickets block <id> <blocker>...` — add blockers
 - [x] `tickets unblock <id> <blocker>...` — remove blockers
 - [x] `tickets note <id> <text>` — append text to the body
-- [x] `tickets archive <id>` — move a done or rejected ticket to `tickets/archived/`
+- [x] `tickets archive <id>...` — move done or rejected tickets to `tickets/archived/`; all IDs are checked first
+  - [x] `--all-rejected` — archive every rejected active ticket (conflicts with IDs)
 - [x] `tickets unarchive <id>` — restore an archived ticket

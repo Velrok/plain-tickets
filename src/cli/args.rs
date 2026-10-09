@@ -121,8 +121,14 @@ pub enum Command {
         after_help = "Text starting with dashes goes after --:\n  tickets note <ID> -- \"--text\""
     )]
     Note { id: ID, text: String },
-    /// Archive a ticket (reversible)
-    Archive { id: ID },
+    /// Archive done or rejected tickets (reversible)
+    Archive {
+        #[arg(required_unless_present = "all_rejected")]
+        ids: Vec<ID>,
+        /// Archive every rejected active ticket instead of naming IDs
+        #[arg(long, conflicts_with = "ids")]
+        all_rejected: bool,
+    },
     /// Restore an archived ticket
     Unarchive { id: ID },
 }
