@@ -1,4 +1,5 @@
 use super::args::Command;
+use super::output;
 use super::presenter::{TicketCliDetailPresenter, TicketCliLinePresenter};
 use crate::config::Config;
 use crate::domain::id::ID;
@@ -40,7 +41,10 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             blocked,
             ready,
             archived,
+            format,
         } => {
+            // Both formats print plain until the pretty list lands.
+            let _mode = output::current(format);
             let filter = Filter {
                 status,
                 r#type,
@@ -94,7 +98,9 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             }
             modify(root, config, id, Change::Set(fields))
         }
-        Command::Show { id } => {
+        Command::Show { id, format } => {
+            // Both formats print plain until the pretty show lands.
+            let _mode = output::current(format);
             println!("{}", TicketCliDetailPresenter(&store::find(root, id)?));
             Ok(())
         }

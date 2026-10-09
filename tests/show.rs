@@ -46,3 +46,24 @@ fn show_of_an_unknown_ticket_fails_naming_the_id_without_output() {
     );
     assert_eq!(raw_stdout(&out), "");
 }
+
+#[test]
+fn show_accepts_format_plain() {
+    let dir = initialised("show-format-plain");
+    let id = new_id(&dir, &["Fix it"]);
+    let plain = tickets(&dir, &["show", &id, "--format", "plain"]);
+    assert!(plain.status.success(), "{}", stderr(&plain));
+    assert_eq!(stdout(&plain), stdout(&tickets(&dir, &["show", &id])));
+}
+
+#[test]
+fn an_unknown_format_is_rejected() {
+    let dir = initialised("format-unknown");
+    let id = new_id(&dir, &["Fix it"]);
+    let show = ["show", id.as_str(), "--format", "fancy"];
+    for args in [&["list", "--format", "fancy"][..], &show[..]] {
+        let out = tickets(&dir, args);
+        assert!(!out.status.success());
+        assert!(stderr(&out).contains("plain"), "{}", stderr(&out));
+    }
+}

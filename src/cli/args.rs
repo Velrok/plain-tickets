@@ -1,6 +1,6 @@
 use crate::domain::id::ID;
 use crate::domain::status::Status;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 /// Markdown tickets with YAML front matter.
 #[derive(Parser)]
@@ -8,6 +8,13 @@ use clap::{Parser, Subcommand};
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
+}
+
+/// How list and show render their output.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum Format {
+    Plain,
+    Pretty,
 }
 
 #[derive(Subcommand)]
@@ -33,7 +40,12 @@ pub enum Command {
         message: Option<String>,
     },
     /// Print a ticket's front matter and body
-    Show { id: ID },
+    Show {
+        id: ID,
+        /// Defaults to pretty on a terminal, plain otherwise
+        #[arg(long)]
+        format: Option<Format>,
+    },
     /// List tickets
     List {
         #[arg(short, long)]
@@ -55,6 +67,9 @@ pub enum Command {
         /// List archived tickets instead of active ones
         #[arg(long)]
         archived: bool,
+        /// Defaults to pretty on a terminal, plain otherwise
+        #[arg(long)]
+        format: Option<Format>,
     },
     /// Open a ticket in $EDITOR
     Edit { id: ID },

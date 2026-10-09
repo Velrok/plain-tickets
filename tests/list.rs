@@ -130,3 +130,12 @@ fn list_treats_a_deleted_blocker_as_not_blocking() {
     assert!(titles(&dir, &["--blocked"]).is_empty());
     assert_eq!(titles(&dir, &["--ready"]), ["Orphaned"]);
 }
+
+#[test]
+fn list_accepts_format_plain() {
+    let dir = initialised("list-format-plain");
+    let id = new_id(&dir, &["Fix it", "-t", "bug"]);
+    let out = tickets(&dir, &["list", "--format", "plain"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(stdout(&out), format!("{id}\ttodo\tbug\tFix it"));
+}
