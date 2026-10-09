@@ -12,6 +12,31 @@ pub const PARENT_ICON: &str = "📁";
 pub const BLOCKED_ICON: &str = "⛔";
 pub const DATES_ICON: &str = "📅";
 
+/// Text ready to print and the terminal columns it occupies, so a table can
+/// pad it correctly even when it holds colour codes or double-width emoji.
+pub struct Cell {
+    pub shown: String,
+    pub width: usize,
+}
+
+impl Cell {
+    pub fn plain(text: &str) -> Cell {
+        Cell {
+            shown: text.to_string(),
+            width: text.chars().count(),
+        }
+    }
+
+    /// `shown` followed by spaces up to `width` columns.
+    pub fn padded(&self, width: usize) -> String {
+        format!(
+            "{}{}",
+            self.shown,
+            " ".repeat(width.saturating_sub(self.width))
+        )
+    }
+}
+
 pub struct Style {
     enabled: bool,
 }
@@ -51,6 +76,18 @@ impl Style {
 
     /// The status with its icon in front, when it has one.
     pub fn status_with_icon(&self, text: &str) -> String {
+        self.status_cell(text).shown
+    }
+
+    /// A table heading: bold, but still only as wide as its text.
+    pub fn heading(&self, text: &str) -> Cell {
+        Cell {
+            shown: self.bold(text),
+            width: text.chars().count(),
+        }
+    }
+
+    pub fn status_cell(&self, text: &str) -> Cell {
         with_icon(
             match text {
                 "todo" => Some("⚪"),
@@ -60,11 +97,16 @@ impl Style {
                 _ => None,
             },
             self.status(text),
+            text,
         )
     }
 
     /// The type with its icon in front, when it has one.
     pub fn type_with_icon(&self, text: &str) -> String {
+        self.type_cell(text).shown
+    }
+
+    pub fn type_cell(&self, text: &str) -> Cell {
         with_icon(
             match text {
                 "bug" => Some("🐛"),
@@ -73,6 +115,7 @@ impl Style {
                 _ => None,
             },
             self.r#type(text),
+            text,
         )
     }
 
@@ -84,10 +127,19 @@ impl Style {
     }
 }
 
-fn with_icon(icon: Option<&str>, text: String) -> String {
+/// `painted` (the coloured `raw`) behind its icon and a space. An emoji takes
+/// two columns.
+fn with_icon(icon: Option<&str>, painted: String, raw: &str) -> Cell {
+    let width = raw.chars().count();
     match icon {
-        Some(icon) => format!("{icon} {text}"),
-        None => text,
+        Some(icon) => Cell {
+            shown: format!("{icon} {painted}"),
+            width: width + 3,
+        },
+        None => Cell {
+            shown: painted,
+            width,
+        },
     }
 }
 
@@ -106,6 +158,16 @@ mod tests {
             style.type_with_icon("bug"),
             format!("🐛 {}", style.r#type("bug"))
         );
+    }
+
+    #[test]
+    fn cell_width_ignores_colour_codes_and_counts_the_icon_as_three_columns() {
+        let coloured = Style::new(true).status_cell("done");
+        let plain = Style::new(false).status_cell("done");
+        assert_eq!(coloured.width, 7);
+        assert_eq!(plain.width, 7);
+        assert_eq!(Style::new(true).type_cell("chore").width, 5);
+        assert_eq!(plain.padded(9), "✅ done  ");
     }
 
     #[test]

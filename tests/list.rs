@@ -149,9 +149,20 @@ fn pretty_list_prints_a_header_and_aligned_columns() {
     assert!(out.status.success(), "{}", stderr(&out));
     let lines: Vec<String> = stdout(&out).lines().map(str::to_string).collect();
     assert_eq!(lines.len(), 3, "{lines:?}");
-    assert_eq!(lines[0], "ID                STATUS       TYPE  TITLE");
-    assert_eq!(lines[1], format!("{b}  todo         {:4}  Write docs", ""));
-    assert_eq!(lines[2], format!("{a}  in progress  bug   Fix it"));
+    assert_eq!(
+        lines[0],
+        format!(
+            "ID{}STATUS{}TYPE{}TITLE",
+            " ".repeat(16),
+            " ".repeat(10),
+            " ".repeat(4)
+        )
+    );
+    assert_eq!(
+        lines[1],
+        format!("{b}  ⚪ todo{}Write docs", " ".repeat(17))
+    );
+    assert_eq!(lines[2], format!("{a}  🟡 in progress  🐛 bug  Fix it"));
 }
 
 #[test]

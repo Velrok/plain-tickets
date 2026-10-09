@@ -1,4 +1,4 @@
-use super::style::{BLOCKED_ICON, DATES_ICON, PARENT_ICON, Style};
+use super::style::{BLOCKED_ICON, Cell, DATES_ICON, PARENT_ICON, Style};
 use crate::domain::id::ID;
 use crate::domain::tickets::Ticket;
 use std::fmt;
@@ -37,68 +37,59 @@ fn truncate(text: &str, max: usize) -> String {
     format!("{kept}…")
 }
 
-/// Pads to `width` columns by the length of the raw `text`, appending the
-/// padding after `shown` (the same text, possibly coloured), so columns line
-/// up with or without colour.
-fn cell(shown: &str, text: &str, width: usize) -> String {
-    let padding = " ".repeat(width.saturating_sub(text.chars().count()));
-    format!("{shown}{padding}")
-}
-
 impl fmt::Display for PrettyListPresenter<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.tickets.is_empty() {
             return Ok(());
         }
-        let types: Vec<&str> = self
+        let style = Style::new(self.colour);
+        let rows: Vec<[Cell; 3]> = self
             .tickets
             .iter()
-            .map(|t| t.r#type.as_deref().unwrap_or(""))
+            .map(|t| {
+                [
+                    Cell::plain(&t.id.to_string()),
+                    style.status_cell(&t.status.to_string()),
+                    style.type_cell(t.r#type.as_deref().unwrap_or("")),
+                ]
+            })
             .collect();
-        let status_width = self
-            .tickets
-            .iter()
-            .map(|t| t.status.to_string().chars().count())
-            .chain([6])
-            .max()
-            .unwrap_or(6);
-        let type_width = types
-            .iter()
-            .map(|t| t.chars().count())
-            .chain([4])
-            .max()
-            .unwrap_or(4);
-        let id_width = 16;
-        let title_width = self.width.map(|w| {
-            w.saturating_sub(id_width + status_width + type_width + 6)
-                .max(1)
+        let header = [
+            style.heading("ID"),
+            style.heading("STATUS"),
+            style.heading("TYPE"),
+        ];
+        let widths: [usize; 3] = std::array::from_fn(|i| {
+            rows.iter()
+                .map(|r| r[i].width)
+                .chain([header[i].width])
+                .max()
+                .unwrap_or(0)
         });
-        write!(
-            f,
-            "{}  {}  {}  TITLE",
-            cell("ID", "ID", id_width),
-            cell("STATUS", "STATUS", status_width),
-            cell("TYPE", "TYPE", type_width)
-        )?;
-        for (t, r#type) in self.tickets.iter().zip(types) {
-            let status = t.status.to_string();
-            let id = t.id.to_string();
-            let style = Style::new(self.colour);
-            write!(
-                f,
-                "\n{}  {}  {}  {}",
-                cell(&id, &id, id_width),
-                cell(&style.status(&status), &status, status_width),
-                cell(&style.r#type(r#type), r#type, type_width),
-                match title_width {
-                    Some(max) => truncate(&t.title.to_string(), max),
-                    None => t.title.to_string(),
-                }
-            )?;
+        let title_width = self
+            .width
+            .map(|w| w.saturating_sub(widths.iter().sum::<usize>() + 6).max(1));
+        let line = |cells: &[Cell; 3], title: &str| {
+            format!(
+                "{}  {}  {}  {title}",
+                cells[0].padded(widths[0]),
+                cells[1].padded(widths[1]),
+                cells[2].padded(widths[2])
+            )
+        };
+        write!(f, "{}", line(&header, &style.heading("TITLE").shown))?;
+        for (t, cells) in self.tickets.iter().zip(&rows) {
+            let title = t.title.to_string();
+            let title = match title_width {
+                Some(max) => truncate(&title, max),
+                None => title,
+            };
+            write!(f, "\n{}", line(cells, &title))?;
         }
         Ok(())
     }
 }
+
 /// A ticket that another ticket points at, looked up by the caller. `ticket`
 /// is `None` when the file no longer exists.
 pub struct Relation {
@@ -351,6 +342,86 @@ mod tests {
     }
 
     #[test]
+    fn list_icons_sit_inside_the_columns_and_widths_count_emoji_as_two() {
+        let tickets = [
+            ticket(1, "todo", Some("bug"), "A"),
+            ticket(2, "in progress", Some("task"), "B"),
+            ticket(3, "done", None, "C"),
+        ];
+        let table = PrettyListPresenter {
+            tickets: &tickets,
+            colour: false,
+            width: None,
+        }
+        .to_string();
+        let lines: Vec<&str> = table.lines().collect();
+        assert_eq!(
+            lines[0],
+            format!(
+                "ID{}STATUS{}TYPE{}TITLE",
+                " ".repeat(16),
+                " ".repeat(10),
+                " ".repeat(5)
+            )
+        );
+        assert_eq!(
+            lines[1],
+            format!(
+                "0000000000000001  ⚪ todo{}🐛 bug{}A",
+                " ".repeat(9),
+                " ".repeat(3)
+            )
+        );
+        assert_eq!(lines[2], "0000000000000002  🟡 in progress  🧩 task  B");
+        assert_eq!(
+            lines[3],
+            format!(
+                "0000000000000003  ✅ done{}{}C",
+                " ".repeat(9),
+                " ".repeat(9)
+            )
+        );
+    }
+
+    #[test]
+    fn a_type_without_an_icon_still_aligns_with_icon_rows() {
+        let tickets = [
+            ticket(1, "todo", Some("bug"), "A"),
+            ticket(2, "todo", Some("chore"), "B"),
+        ];
+        let table = PrettyListPresenter {
+            tickets: &tickets,
+            colour: false,
+            width: None,
+        }
+        .to_string();
+        let lines: Vec<&str> = table.lines().collect();
+        assert_eq!(lines[1], "0000000000000001  ⚪ todo  🐛 bug  A");
+        assert_eq!(lines[2], "0000000000000002  ⚪ todo  chore   B");
+    }
+
+    #[test]
+    fn the_header_row_is_bold_only_with_colour() {
+        let tickets = [ticket(1, "todo", Some("bug"), "A")];
+        let render = |colour| {
+            PrettyListPresenter {
+                tickets: &tickets,
+                colour,
+                width: None,
+            }
+            .to_string()
+        };
+        let (plain, coloured) = (render(false), render(true));
+        let style = Style::new(true);
+        let header = coloured.lines().next().unwrap();
+        for title in ["ID", "STATUS", "TYPE", "TITLE"] {
+            assert!(header.contains(&style.bold(title)), "{header:?}");
+        }
+        assert!(!plain.contains('\x1b'));
+        assert_eq!(without_colour(&coloured), plain);
+    }
+
+    #[test]
     fn truncates_long_titles_with_an_ellipsis_to_fit_the_width() {
         let tickets = [
             ticket(1, "todo", Some("bug"), "A very long title that cannot fit"),
@@ -363,9 +434,13 @@ mod tests {
         }
         .to_string();
         let lines: Vec<&str> = table.lines().collect();
-        assert!(lines.iter().all(|l| l.chars().count() <= 40), "{lines:?}");
-        assert_eq!(lines[1], "0000000000000001  todo    bug   A very …");
-        assert_eq!(lines[2], "0000000000000002  todo          Short");
+        // Row 1 holds two emoji, each two columns wide but one char.
+        assert_eq!(lines[1], "0000000000000001  ⚪ todo  🐛 bug  A ve…");
+        assert_eq!(lines[1].chars().count() + 2, 40);
+        assert_eq!(
+            lines[2],
+            format!("0000000000000002  ⚪ todo{}Short", " ".repeat(10))
+        );
     }
 
     #[test]
