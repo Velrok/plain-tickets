@@ -67,3 +67,43 @@ fn an_unknown_format_is_rejected() {
         assert!(stderr(&out).contains("plain"), "{}", stderr(&out));
     }
 }
+
+#[test]
+fn pretty_show_resolves_the_parent_and_blockers() {
+    let dir = initialised("show-pretty");
+    let parent = new_id(&dir, &["The epic", "-s", "in progress"]);
+    let blocker = new_id(&dir, &["Finished first", "-s", "done"]);
+    let id = new_id(
+        &dir,
+        &[
+            "Fix it",
+            "-t",
+            "bug",
+            "-g",
+            "cli",
+            "-p",
+            &parent,
+            "-b",
+            &blocker,
+            "-m",
+            "Some body",
+        ],
+    );
+    assert!(tickets(&dir, &["archive", &blocker]).status.success());
+    let out = tickets_env(
+        &dir,
+        &["show", &id, "--format", "pretty"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(out.status.success(), "{}", stderr(&out));
+    let text = stdout(&out);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines[0], "Fix it");
+    assert_eq!(lines[1], format!("{id} · bug · todo · #cli"));
+    assert_eq!(lines[2], format!("Parent: {parent} The epic [in progress]"));
+    assert_eq!(
+        lines[3],
+        format!("Blocked by: {blocker} Finished first [done]")
+    );
+    assert_eq!(lines.last(), Some(&"Some body"));
+}

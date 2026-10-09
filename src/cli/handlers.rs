@@ -1,6 +1,8 @@
 use super::args::{Command, Format};
 use super::output;
-use super::presenter::{PlainDetailPresenter, PlainLinePresenter, PrettyListPresenter};
+use super::presenter::{
+    PlainDetailPresenter, PlainLinePresenter, PrettyDetailPresenter, PrettyListPresenter, Relation,
+};
 use crate::config::Config;
 use crate::domain::id::ID;
 use crate::domain::query::Filter;
@@ -114,9 +116,27 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             modify(root, config, id, Change::Set(fields))
         }
         Command::Show { id, format } => {
-            // Both formats print plain until the pretty show lands.
-            let _mode = output::current(format);
-            println!("{}", PlainDetailPresenter(&store::find(root, id)?));
+            let mode = output::current(format);
+            let ticket = store::find(root, id)?;
+            match mode.format {
+                Format::Plain => println!("{}", PlainDetailPresenter(&ticket)),
+                Format::Pretty => {
+                    // A relation whose file cannot be read is shown as not found.
+                    let relation = |id: ID| Relation {
+                        id,
+                        ticket: store::find(root, id).ok(),
+                    };
+                    println!(
+                        "{}",
+                        PrettyDetailPresenter {
+                            parent: ticket.parent.map(relation),
+                            blockers: ticket.blocked_by.iter().copied().map(relation).collect(),
+                            ticket: &ticket,
+                            colour: mode.colour,
+                        }
+                    );
+                }
+            }
             Ok(())
         }
         Command::Archive { id } => archive(root, id),
