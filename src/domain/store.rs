@@ -278,6 +278,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_failed_replace_leaves_the_old_file_intact() {
         use std::os::unix::fs::PermissionsExt;

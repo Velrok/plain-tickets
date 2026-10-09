@@ -285,11 +285,15 @@ fn edit_text(id: ID, text: &str) -> Result<String, String> {
 
 /// Creates an empty directory with a random name and mode 0700 under the temp dir.
 fn private_temp_dir() -> Result<std::path::PathBuf, String> {
-    use std::os::unix::fs::DirBuilderExt;
     let random = getrandom::u64().expect("OS random number generator unavailable");
     let dir = std::env::temp_dir().join(format!("tickets-{random:016x}"));
-    std::fs::DirBuilder::new()
-        .mode(0o700)
+    let mut builder = std::fs::DirBuilder::new();
+    // Windows has no mode bits; the temp dir is per-user there.
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    #[cfg(not(unix))]
+    let _ = &mut builder;
+    builder
         .create(&dir)
         .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
     Ok(dir)
@@ -360,7 +364,12 @@ fn new(
         .map(|_| next_id())
         .find(|id| !store::exists(root, *id))
         .ok_or("could not find a unique ticket ID")?;
-    let ticket = Ticket::new(draft, config, id, Timestamp::now())?;
+    // Creation time orders the list, so it must pass every existing ticket's.
+    let now = match store::list(root)?.iter().map(|t| t.created_at).max() {
+        Some(latest) if latest >= Timestamp::now() => latest.next_millisecond(),
+        _ => Timestamp::now(),
+    };
+    let ticket = Ticket::new(draft, config, id, now)?;
     store::create(root, &ticket)?;
     Ok(ticket.id)
 }
@@ -398,6 +407,19 @@ mod tests {
         let mut ids = [1, 2, 3].map(ID).into_iter();
         let id = new(&root, &config, draft(), || ids.next().unwrap()).unwrap();
         assert_eq!(id, ID(3));
+    }
+
+    #[test]
+    fn new_tickets_list_in_creation_order_even_within_one_millisecond() {
+        let root = scratch("order");
+        let config = Config::default();
+        // Falling IDs: a tie on the timestamp would list the newest ticket first.
+        for id in (1..=30).rev() {
+            new(&root, &config, draft(), || ID(id)).unwrap();
+        }
+        let listed = Filter::default().select(store::list(&root).unwrap(), &config);
+        let ids: Vec<u64> = listed.iter().map(|t| t.id.0).collect();
+        assert_eq!(ids, (1..=30).rev().collect::<Vec<_>>());
     }
 
     #[test]

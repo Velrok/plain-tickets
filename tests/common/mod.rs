@@ -39,6 +39,7 @@ pub fn new_id(dir: &Path, args: &[&str]) -> String {
     stdout(&out)
 }
 
+#[cfg(unix)]
 /// Runs `tickets` with `$EDITOR` set to a script that executes `body` with
 /// the ticket file as `$1`. `$VISUAL` is cleared.
 pub fn tickets_editing(dir: &Path, args: &[&str], body: &str) -> Output {

@@ -1,3 +1,4 @@
+#![cfg(unix)] // the editor stub is a shell script
 mod common;
 use common::*;
 

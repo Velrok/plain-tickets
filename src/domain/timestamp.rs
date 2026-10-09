@@ -20,6 +20,11 @@ impl Timestamp {
         Timestamp::utc_millis(OffsetDateTime::now_utc())
     }
 
+    /// The next millisecond.
+    pub fn next_millisecond(self) -> Timestamp {
+        Timestamp(self.0 + time::Duration::milliseconds(1))
+    }
+
     /// Converts to UTC and drops everything below a millisecond.
     fn utc_millis(moment: OffsetDateTime) -> Timestamp {
         let utc = moment.to_offset(time::UtcOffset::UTC);
