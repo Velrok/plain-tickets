@@ -387,7 +387,7 @@ mod tests {
     fn a_type_without_an_icon_still_aligns_with_icon_rows() {
         let tickets = [
             ticket(1, "todo", Some("bug"), "A"),
-            ticket(2, "todo", Some("chore"), "B"),
+            ticket(2, "todo", Some("misc"), "B"),
         ];
         let table = PrettyListPresenter {
             tickets: &tickets,
@@ -397,7 +397,7 @@ mod tests {
         .to_string();
         let lines: Vec<&str> = table.lines().collect();
         assert_eq!(lines[1], "0000000000000001  ⚪ todo  🐛 bug  A");
-        assert_eq!(lines[2], "0000000000000002  ⚪ todo  chore   B");
+        assert_eq!(lines[2], "0000000000000002  ⚪ todo  misc    B");
     }
 
     #[test]

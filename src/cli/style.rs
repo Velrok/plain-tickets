@@ -90,10 +90,15 @@ impl Style {
     pub fn status_cell(&self, text: &str) -> Cell {
         with_icon(
             match text {
-                "todo" => Some("⚪"),
-                "in progress" => Some("🟡"),
+                "todo" | "open" | "backlog" => Some("⚪"),
+                "in progress" | "doing" => Some("🟡"),
+                "in review" => Some("👀"),
+                "blocked" => Some("⛔"),
+                "testing" | "qa" => Some("🧪"),
+                "on hold" | "waiting" => Some("🔵"),
                 "done" => Some("✅"),
-                "rejected" => Some("❌"),
+                "rejected" | "won't do" => Some("❌"),
+                "duplicate" => Some("🔁"),
                 _ => None,
             },
             self.status(text),
@@ -112,6 +117,15 @@ impl Style {
                 "bug" => Some("🐛"),
                 "feature" => Some("✨"),
                 "task" => Some("🧩"),
+                "chore" => Some("🧹"),
+                "epic" => Some("🎯"),
+                "story" => Some("📖"),
+                "spike" | "research" => Some("🔬"),
+                "docs" => Some("📝"),
+                "refactor" => Some("🔧"),
+                "test" => Some("🧪"),
+                "incident" => Some("🚨"),
+                "idea" => Some("💡"),
                 _ => None,
             },
             self.r#type(text),
@@ -166,8 +180,47 @@ mod tests {
         let plain = Style::new(false).status_cell("done");
         assert_eq!(coloured.width, 7);
         assert_eq!(plain.width, 7);
-        assert_eq!(Style::new(true).type_cell("chore").width, 5);
+        assert_eq!(Style::new(true).type_cell("misc").width, 4);
         assert_eq!(plain.padded(9), "✅ done  ");
+    }
+
+    #[test]
+    fn common_types_have_icons() {
+        let style = Style::new(false);
+        for (name, icon) in [
+            ("chore", "🧹"),
+            ("epic", "🎯"),
+            ("story", "📖"),
+            ("spike", "🔬"),
+            ("research", "🔬"),
+            ("docs", "📝"),
+            ("refactor", "🔧"),
+            ("test", "🧪"),
+            ("incident", "🚨"),
+            ("idea", "💡"),
+        ] {
+            assert_eq!(style.type_with_icon(name), format!("{icon} {name}"));
+        }
+    }
+
+    #[test]
+    fn common_statuses_have_icons() {
+        let style = Style::new(false);
+        for (name, icon) in [
+            ("open", "⚪"),
+            ("backlog", "⚪"),
+            ("doing", "🟡"),
+            ("in review", "👀"),
+            ("blocked", "⛔"),
+            ("testing", "🧪"),
+            ("qa", "🧪"),
+            ("on hold", "🔵"),
+            ("waiting", "🔵"),
+            ("duplicate", "🔁"),
+            ("won't do", "❌"),
+        ] {
+            assert_eq!(style.status_with_icon(name), format!("{icon} {name}"));
+        }
     }
 
     #[test]
@@ -180,7 +233,7 @@ mod tests {
     #[test]
     fn unknown_statuses_and_types_get_no_icon() {
         let style = Style::new(false);
-        assert_eq!(style.status_with_icon("blocked"), "blocked");
-        assert_eq!(style.type_with_icon("chore"), "chore");
+        assert_eq!(style.status_with_icon("triaged"), "triaged");
+        assert_eq!(style.type_with_icon("misc"), "misc");
     }
 }
