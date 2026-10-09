@@ -129,12 +129,19 @@ fn read_dir(dir: &Path) -> Result<Vec<Ticket>, String> {
         let path = entry
             .map_err(|e| format!("cannot read {}: {e}", dir.display()))?
             .path();
-        let text = std::fs::read_to_string(&path)
-            .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-        tickets.push(
-            text.parse()
-                .map_err(|e| format!("{}: {e}", path.display()))?,
-        );
+        if path.extension().is_none_or(|ext| ext != "md") {
+            continue;
+        }
+        let parsed = std::fs::read_to_string(&path)
+            .map_err(|e| format!("cannot read {}: {e}", path.display()))
+            .and_then(|text| {
+                text.parse::<Ticket>()
+                    .map_err(|e| format!("{}: {e}", path.display()))
+            });
+        match parsed {
+            Ok(ticket) => tickets.push(ticket),
+            Err(e) => eprintln!("warning: skipping {e}"),
+        }
     }
     Ok(tickets)
 }

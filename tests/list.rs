@@ -112,16 +112,6 @@ fn list_ready_shows_open_tickets_without_unfinished_blockers() {
 }
 
 #[test]
-fn list_names_a_corrupt_ticket_file_in_the_error() {
-    let dir = initialised("list-corrupt");
-    new_id(&dir, &["Fine"]);
-    std::fs::write(dir.join("tickets/all/broken.md"), "not a ticket").unwrap();
-    let out = tickets(&dir, &["list"]);
-    assert!(!out.status.success());
-    assert!(stderr(&out).contains("broken.md"), "{}", stderr(&out));
-}
-
-#[test]
 fn list_treats_a_deleted_blocker_as_not_blocking() {
     let dir = initialised("list-ghost");
     let gone = new_id(&dir, &["Gone"]);
@@ -190,4 +180,26 @@ fn tickets_created_in_the_same_second_list_in_creation_order() {
         new_id(&dir, &[title]);
     }
     assert_eq!(titles(&dir, &[]), expected);
+}
+
+#[test]
+fn list_skips_files_that_are_not_markdown() {
+    let dir = initialised("list-stray-file");
+    new_id(&dir, &["Fix it"]);
+    std::fs::write(dir.join("tickets/all/.DS_Store"), [0u8, 159, 146, 150]).unwrap();
+    let out = tickets(&dir, &["list"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(titles(&dir, &[]), ["Fix it"]);
+    assert_eq!(stderr(&out), "");
+}
+
+#[test]
+fn list_warns_about_a_corrupt_ticket_file_and_lists_the_rest() {
+    let dir = initialised("list-corrupt-file");
+    new_id(&dir, &["Fix it"]);
+    std::fs::write(dir.join("tickets/all/broken.md"), "not a ticket").unwrap();
+    let out = tickets(&dir, &["list"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(titles(&dir, &[]), ["Fix it"]);
+    assert!(stderr(&out).contains("broken.md"), "{}", stderr(&out));
 }
