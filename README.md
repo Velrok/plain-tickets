@@ -37,3 +37,4 @@ Markdown tickets with YAML front matter, one file per ticket.
 - [x] `tickets archive <id>...` — move done or rejected tickets to `tickets/archived/`; all IDs are checked first
   - [x] `--all-rejected` — archive every rejected active ticket (conflicts with IDs)
 - [x] `tickets unarchive <id>` — restore an archived ticket
+- [x] `tickets --version` — `<version> (<short sha>)`; the SHA is `unknown` without git

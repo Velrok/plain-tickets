@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 /// Markdown tickets with YAML front matter.
 #[derive(Parser)]
-#[command(name = "tickets", version, about)]
+#[command(name = "tickets", version = env!("TICKETS_VERSION_STRING"), about)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
