@@ -196,11 +196,15 @@ impl std::str::FromStr for Ticket {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.strip_prefix("---\n").unwrap_or(s);
-        let end = s
-            .find("\n---\n")
-            .ok_or_else(|| "missing front matter closing delimiter".to_string())?;
-        let yaml = &s[..end];
-        let body = s[end + 5..].trim_start_matches('\n').to_string();
+        let (yaml, body) = match s.find("\n---\n") {
+            Some(end) => (&s[..end], s[end + 5..].trim_start_matches('\n')),
+            None => (
+                s.strip_suffix("\n---")
+                    .ok_or_else(|| "missing front matter closing delimiter".to_string())?,
+                "",
+            ),
+        };
+        let body = body.to_string();
         let mut ticket: Ticket =
             serde_yaml::from_str(yaml).map_err(|e| format!("invalid front matter: {e}"))?;
         ticket.body = body;
@@ -271,6 +275,15 @@ mod tests {
         assert!(text.ends_with("---\n"));
         let parsed: Ticket = text.parse().unwrap();
         assert_eq!(parsed.to_string(), text);
+    }
+
+    #[test]
+    fn accepts_a_closing_delimiter_at_the_end_of_the_file() {
+        let text = ticket("").to_string();
+        let trimmed = text.strip_suffix('\n').unwrap();
+        let parsed: Ticket = trimmed.parse().unwrap();
+        assert_eq!(parsed.to_string(), text);
+        assert_eq!(parsed.body, "");
     }
 
     #[test]
