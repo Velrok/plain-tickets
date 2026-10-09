@@ -5,9 +5,15 @@ use serde::{Deserialize, Serialize};
 pub struct ID(pub u64);
 
 impl ID {
-    /// A random ID from the OS RNG. Panics if the OS RNG is unavailable.
-    pub fn rand() -> ID {
-        ID(getrandom::u64().expect("OS random number generator unavailable"))
+    /// A new ID that sorts after IDs made earlier: the time in milliseconds in
+    /// the top 48 bits, 16 random bits below to tell apart IDs made in the same
+    /// millisecond. Panics if the OS RNG is unavailable.
+    pub fn generate() -> ID {
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis() as u64);
+        let random = getrandom::u32().expect("OS random number generator unavailable");
+        ID(millis << 16 | u64::from(random & 0xffff))
     }
 }
 
@@ -50,6 +56,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn later_ids_sort_after_earlier_ones() {
+        let earlier = ID::generate();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        assert!(ID::generate() > earlier);
+    }
+
+    #[test]
     fn parses_only_full_sixteen_digit_hex() {
         assert_eq!("00000000000000ab".parse::<ID>().unwrap(), ID(0xab));
         for bad in [
@@ -61,10 +74,5 @@ mod tests {
         ] {
             assert!(bad.parse::<ID>().is_err(), "{bad}");
         }
-    }
-
-    #[test]
-    fn rand_ids_differ() {
-        assert_ne!(ID::rand(), ID::rand());
     }
 }

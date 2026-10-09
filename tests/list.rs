@@ -181,3 +181,13 @@ fn pretty_list_is_coloured_when_piped_unless_no_color_is_set() {
     let off = tickets_env(&dir, &args, &[("NO_COLOR", "1")]);
     assert!(!stdout(&off).contains('\x1b'));
 }
+
+#[test]
+fn tickets_created_in_the_same_second_list_in_creation_order() {
+    let dir = initialised("list-same-second");
+    let expected: Vec<String> = (0..15).map(|n| format!("Ticket {n:02}")).collect();
+    for title in &expected {
+        new_id(&dir, &[title]);
+    }
+    assert_eq!(titles(&dir, &[]), expected);
+}

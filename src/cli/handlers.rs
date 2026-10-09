@@ -225,7 +225,7 @@ fn edit(root: &Path, config: &Config, id: ID) -> Result<(), String> {
 /// Creates a ticket under `root` and returns its ID.
 fn new(root: &Path, config: &Config, draft: NewTicket) -> Result<ID, String> {
     ensure_exist(root, draft.parent.iter().chain(&draft.blocked_by))?;
-    let ticket = Ticket::new(draft, config, ID::rand(), now())?;
+    let ticket = Ticket::new(draft, config, ID::generate(), now())?;
     store::create(root, &ticket)?;
     Ok(ticket.id)
 }
