@@ -12,9 +12,9 @@ fn list_prints_nothing_when_there_are_no_tickets() {
 #[test]
 fn list_prints_one_tab_separated_line_per_ticket() {
     let dir = initialised("list-line");
-    let id = new_id(&dir, &["Fix it", "-s", "in progress"]);
+    let id = new_id(&dir, &["Fix it", "-s", "in progress", "-t", "bug"]);
     let out = tickets(&dir, &["list"]);
-    assert_eq!(stdout(&out), format!("{id}\tin progress\tFix it"));
+    assert_eq!(stdout(&out), format!("{id}\tin progress\tbug\tFix it"));
 }
 
 fn titles(dir: &std::path::Path, args: &[&str]) -> Vec<String> {
