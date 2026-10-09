@@ -143,7 +143,7 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
         Command::Archive { id } => archive(root, id),
         Command::Unarchive { id } => store::unarchive(root, id),
         Command::Note { id, text } => modify(root, config, id, Change::AppendNote(text)),
-        _ => Err("not implemented yet".to_string()),
+        Command::Init => unreachable!("main handles init before loading the config"),
     }
 }
 
