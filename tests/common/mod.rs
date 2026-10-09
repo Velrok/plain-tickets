@@ -77,3 +77,13 @@ pub fn age_ticket(dir: &Path, id: &str) -> String {
     std::fs::write(dir.join(format!("tickets/all/{id}.md")), &aged).unwrap();
     aged
 }
+
+/// Like `tickets`, with extra environment variables set.
+pub fn tickets_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_tickets"))
+        .args(args)
+        .current_dir(dir)
+        .envs(env.iter().copied())
+        .output()
+        .unwrap()
+}

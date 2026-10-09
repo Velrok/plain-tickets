@@ -145,7 +145,7 @@ fn pretty_list_prints_a_header_and_aligned_columns() {
     let dir = initialised("list-pretty");
     let a = new_id(&dir, &["Fix it", "-s", "in progress", "-t", "bug"]);
     let b = new_id(&dir, &["Write docs"]);
-    let out = tickets(&dir, &["list", "--format", "pretty"]);
+    let out = tickets_env(&dir, &["list", "--format", "pretty"], &[("NO_COLOR", "1")]);
     assert!(out.status.success(), "{}", stderr(&out));
     let lines: Vec<String> = stdout(&out).lines().map(str::to_string).collect();
     assert_eq!(lines.len(), 3, "{lines:?}");
@@ -159,4 +159,14 @@ fn pretty_list_prints_nothing_when_there_are_no_tickets() {
     let dir = initialised("list-pretty-empty");
     let out = tickets(&dir, &["list", "--format", "pretty"]);
     assert_eq!(stdout(&out), "");
+}
+
+#[test]
+fn pretty_list_is_coloured_when_piped_unless_no_color_is_set() {
+    let dir = initialised("list-pretty-colour");
+    new_id(&dir, &["Fix it", "-t", "bug"]);
+    let args = ["list", "--format", "pretty"];
+    assert!(stdout(&tickets_env(&dir, &args, &[])).contains("\x1b[31mbug\x1b[0m"));
+    let off = tickets_env(&dir, &args, &[("NO_COLOR", "1")]);
+    assert!(!stdout(&off).contains('\x1b'));
 }

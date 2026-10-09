@@ -4,7 +4,7 @@ use std::io::IsTerminal;
 /// How list and show should render, once flags and environment are resolved.
 pub struct Mode {
     pub format: Format,
-    /// Only ever on for pretty output to a terminal, and never under `NO_COLOR`.
+    /// On for every pretty render (chosen by flag or by a terminal) unless `NO_COLOR` is set.
     pub colour: bool,
 }
 
@@ -17,7 +17,7 @@ pub fn resolve(flag: Option<Format>, is_tty: bool, no_color: bool) -> Mode {
     });
     Mode {
         format,
-        colour: format == Format::Pretty && is_tty && !no_color,
+        colour: format == Format::Pretty && !no_color,
     }
 }
 
@@ -45,6 +45,12 @@ mod tests {
         let plain_text = resolve(None, true, true);
         assert_eq!(plain_text.format, Format::Pretty);
         assert!(!plain_text.colour);
+    }
+
+    #[test]
+    fn an_explicit_pretty_format_keeps_colour_when_piped_unless_no_color() {
+        assert!(resolve(Some(Format::Pretty), false, false).colour);
+        assert!(!resolve(Some(Format::Pretty), false, true).colour);
     }
 
     #[test]
