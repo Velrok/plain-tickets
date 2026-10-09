@@ -40,7 +40,7 @@ pub fn find(root: &Path, id: ID) -> Result<Ticket, String> {
 }
 
 fn read_file(path: &Path) -> Result<Option<Ticket>, String> {
-    match std::fs::read_to_string(&path) {
+    match std::fs::read_to_string(path) {
         Ok(text) => text
             .parse()
             .map(Some)

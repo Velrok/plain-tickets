@@ -7,7 +7,14 @@ pub struct TicketCliLinePresenter<'a>(pub &'a Ticket);
 impl fmt::Display for TicketCliLinePresenter<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let t = self.0;
-        write!(f, "{}\t{}\t{}\t{}", t.id, t.status, t.r#type.as_deref().unwrap_or(""), t.title)
+        write!(
+            f,
+            "{}\t{}\t{}\t{}",
+            t.id,
+            t.status,
+            t.r#type.as_deref().unwrap_or(""),
+            t.title
+        )
     }
 }
 
