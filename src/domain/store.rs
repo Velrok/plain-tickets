@@ -12,13 +12,7 @@ pub fn create(root: &Path, ticket: &Ticket) -> Result<PathBuf, String> {
     use std::io::Write;
 
     let path = path(root, ticket.id);
-    let dir = path.parent    // Sync through the writing handle: Windows refuses to fsync a read-only one.
-    let written = std::fs::File::create(&tmp)
-        .and_then(|mut file| {
-            file.write_all(ticket.to_string().as_bytes())?;
-            file.sync_all()
-        })
-        .and_then(|()| std::fs::rename(&tmp, &path));.expect("ticket path has a parent");
+    let dir = path.parent().expect("ticket path has a parent");
     std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
     let mut file = std::fs::OpenOptions::new()
         .write(true)
@@ -162,8 +156,12 @@ pub fn replace(root: &Path, ticket: &Ticket) -> Result<(), String> {
     // Write next to the target and rename over it, so a crash never leaves a half-written ticket.
     // The temp name does not end in `.md`, so listing ignores a leftover one.
     let tmp = path.with_extension("tmp");
-    let written = std::fs::write(&tmp, ticket.to_string())
-        .and_then(|()| std::fs::File::open(&tmp)?.sync_all())
+    // Sync through the writing handle: Windows refuses to fsync a read-only one.
+    let written = std::fs::File::create(&tmp)
+        .and_then(|mut file| {
+            file.write_all(ticket.to_string().as_bytes())?;
+            file.sync_all()
+        })
         .and_then(|()| std::fs::rename(&tmp, &path));
     written.map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
