@@ -228,3 +228,18 @@ fn set_rejects_invalid_values_and_leaves_the_ticket_untouched() {
         assert_eq!(ticket_text(&dir, &id), aged, "{flags:?}");
     }
 }
+
+#[test]
+fn a_ticket_can_still_be_modified_once_its_blocker_or_parent_is_archived() {
+    let dir = initialised("modify-archived-refs");
+    let blocker = new_id(&dir, &["Blocker", "-s", "done"]);
+    let parent = new_id(&dir, &["Parent", "-s", "done"]);
+    let child = new_id(&dir, &["Child", "-b", &blocker, "-p", &parent]);
+    for id in [&blocker, &parent] {
+        let out = tickets(&dir, &["archive", id]);
+        assert!(out.status.success(), "{}", stderr(&out));
+    }
+    let out = tickets(&dir, &["note", &child, "hi"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(ticket_text(&dir, &child).ends_with("---\n\nhi\n"));
+}

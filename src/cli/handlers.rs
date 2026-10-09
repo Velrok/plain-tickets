@@ -169,7 +169,21 @@ fn save_revision(
 ) -> Result<(), String> {
     match ticket.revise(edited, config, Timestamp::now())? {
         Some(revised) => {
-            ensure_exist(root, revised.parent.iter().chain(&revised.blocked_by))?;
+            let kept = |id: &&ID| {
+                ticket
+                    .parent
+                    .iter()
+                    .chain(&ticket.blocked_by)
+                    .all(|old| old != *id)
+            };
+            ensure_exist(
+                root,
+                revised
+                    .parent
+                    .iter()
+                    .chain(&revised.blocked_by)
+                    .filter(kept),
+            )?;
             store::replace(root, &revised)
         }
         None => Ok(()),
