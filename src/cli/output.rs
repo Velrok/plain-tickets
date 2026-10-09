@@ -2,10 +2,6 @@ use super::args::Format;
 use std::io::IsTerminal;
 
 /// How list and show should render, once flags and environment are resolved.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "read by the pretty list and show renderers")
-)]
 pub struct Mode {
     pub format: Format,
     /// Only ever on for pretty output to a terminal, and never under `NO_COLOR`.

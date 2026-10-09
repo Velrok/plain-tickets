@@ -1,6 +1,6 @@
-use super::args::Command;
+use super::args::{Command, Format};
 use super::output;
-use super::presenter::{TicketCliDetailPresenter, TicketCliLinePresenter};
+use super::presenter::{PlainDetailPresenter, PlainLinePresenter, PrettyListPresenter};
 use crate::config::Config;
 use crate::domain::id::ID;
 use crate::domain::query::Filter;
@@ -43,8 +43,7 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             archived,
             format,
         } => {
-            // Both formats print plain until the pretty list lands.
-            let _mode = output::current(format);
+            let mode = output::current(format);
             let filter = Filter {
                 status,
                 r#type,
@@ -58,8 +57,24 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             } else {
                 store::list(root)?
             };
-            for t in filter.select(found, config) {
-                println!("{}", TicketCliLinePresenter(&t));
+            let selected = filter.select(found, config);
+            match mode.format {
+                Format::Plain => {
+                    for t in &selected {
+                        println!("{}", PlainLinePresenter(t));
+                    }
+                }
+                Format::Pretty => {
+                    let table = PrettyListPresenter {
+                        tickets: &selected,
+                        colour: mode.colour,
+                        width: terminal_size::terminal_size().map(|(w, _)| w.0 as usize),
+                    }
+                    .to_string();
+                    if !table.is_empty() {
+                        println!("{table}");
+                    }
+                }
             }
             Ok(())
         }
@@ -101,7 +116,7 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
         Command::Show { id, format } => {
             // Both formats print plain until the pretty show lands.
             let _mode = output::current(format);
-            println!("{}", TicketCliDetailPresenter(&store::find(root, id)?));
+            println!("{}", PlainDetailPresenter(&store::find(root, id)?));
             Ok(())
         }
         Command::Archive { id } => archive(root, id),

@@ -139,3 +139,24 @@ fn list_accepts_format_plain() {
     assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(stdout(&out), format!("{id}\ttodo\tbug\tFix it"));
 }
+
+#[test]
+fn pretty_list_prints_a_header_and_aligned_columns() {
+    let dir = initialised("list-pretty");
+    let a = new_id(&dir, &["Fix it", "-s", "in progress", "-t", "bug"]);
+    let b = new_id(&dir, &["Write docs"]);
+    let out = tickets(&dir, &["list", "--format", "pretty"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    let lines: Vec<String> = stdout(&out).lines().map(str::to_string).collect();
+    assert_eq!(lines.len(), 3, "{lines:?}");
+    assert_eq!(lines[0], "ID                STATUS       TYPE  TITLE");
+    assert_eq!(lines[1], format!("{b}  todo         {:4}  Write docs", ""));
+    assert_eq!(lines[2], format!("{a}  in progress  bug   Fix it"));
+}
+
+#[test]
+fn pretty_list_prints_nothing_when_there_are_no_tickets() {
+    let dir = initialised("list-pretty-empty");
+    let out = tickets(&dir, &["list", "--format", "pretty"]);
+    assert_eq!(stdout(&out), "");
+}

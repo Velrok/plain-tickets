@@ -38,6 +38,8 @@ First time only: `tickets init` creates `.tickets/config.toml`. Statuses are
 ## Rules
 
 - IDs are always the full 16 hex digits.
+- **Whenever you mention a ticket ID to the user, include its title** (e.g.
+  `4e480da792336de5` List order is arbitrary…). Bare IDs are unreadable.
 - Commit `tickets/` together with the code change it tracks.
 - Only `done` or `rejected` tickets can be archived.
 
