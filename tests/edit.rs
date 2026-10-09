@@ -167,3 +167,50 @@ fn edit_explains_when_no_editor_is_configured() {
     let (_, err, _) = run_edit_with_env("edit-no-editor", None, None);
     assert!(err.contains("VISUAL") && err.contains("EDITOR"), "{err}");
 }
+
+/// Runs `edit` with `$TMPDIR` pointing at a fresh directory and an editor that records
+/// `ls -ld` of the directory holding its file and the file's own path.
+fn edit_recording_tmp(name: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = initialised(name);
+    let id = new_id(&dir, &["Fix it"]);
+    let tmp = dir.join("tmp");
+    std::fs::create_dir(&tmp).unwrap();
+    let script = dir.join("editor.sh");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\nls -ld \"$(dirname \"$1\")\" > perms.txt\necho \"$1\" > path.txt\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let out = tickets_env(
+        &dir,
+        &["edit", &id],
+        &[
+            ("EDITOR", script.to_str().unwrap()),
+            ("TMPDIR", tmp.to_str().unwrap()),
+        ],
+    );
+    assert!(out.status.success(), "{}", stderr(&out));
+    (dir, tmp)
+}
+
+#[test]
+fn edit_gives_the_editor_a_file_in_a_private_directory() {
+    let (dir, tmp) = edit_recording_tmp("edit-private");
+    let path = std::fs::read_to_string(dir.join("path.txt")).unwrap();
+    let path = std::path::Path::new(path.trim());
+    assert_ne!(
+        path.parent().unwrap(),
+        tmp,
+        "file sits in the shared temp dir"
+    );
+    let perms = std::fs::read_to_string(dir.join("perms.txt")).unwrap();
+    assert!(perms.starts_with("drwx------"), "{perms}");
+}
+
+#[test]
+fn edit_removes_its_temporary_files_afterwards() {
+    let (_dir, tmp) = edit_recording_tmp("edit-cleanup");
+    assert_eq!(std::fs::read_dir(&tmp).unwrap().count(), 0);
+}

@@ -208,16 +208,40 @@ fn edit_text(id: ID, text: &str) -> Result<String, String> {
     let editor = std::env::var("VISUAL")
         .or_else(|_| std::env::var("EDITOR"))
         .map_err(|_| "set $VISUAL or $EDITOR to choose an editor".to_string())?;
-    let tmp = std::env::temp_dir().join(format!("tickets-{id}-{}.md", std::process::id()));
-    std::fs::write(&tmp, text).map_err(|e| format!("cannot write {}: {e}", tmp.display()))?;
+    let dir = private_temp_dir()?;
+    let result = run_editor(&editor, &dir.join(format!("{id}.md")), text);
+    let _ = std::fs::remove_dir_all(&dir);
+    result
+}
+
+/// Creates an empty directory with a random name and mode 0700 under the temp dir.
+fn private_temp_dir() -> Result<std::path::PathBuf, String> {
+    use std::os::unix::fs::DirBuilderExt;
+    let random = getrandom::u64().expect("OS random number generator unavailable");
+    let dir = std::env::temp_dir().join(format!("tickets-{random:016x}"));
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&dir)
+        .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    Ok(dir)
+}
+
+/// Writes `text` to a new file at `tmp`, runs `editor` on it and returns what it left there.
+fn run_editor(editor: &str, tmp: &std::path::Path, text: &str) -> Result<String, String> {
+    use std::io::Write;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(tmp)
+        .and_then(|mut file| file.write_all(text.as_bytes()))
+        .map_err(|e| format!("cannot write {}: {e}", tmp.display()))?;
     let status = std::process::Command::new("sh")
         .arg("-c")
         .arg(format!("{editor} \"$0\""))
-        .arg(&tmp)
+        .arg(tmp)
         .status()
         .map_err(|e| format!("cannot run editor: {e}"))?;
-    let edited = std::fs::read_to_string(&tmp);
-    let _ = std::fs::remove_file(&tmp);
+    let edited = std::fs::read_to_string(tmp);
     if !status.success() {
         return Err(format!("editor exited with {status}"));
     }
