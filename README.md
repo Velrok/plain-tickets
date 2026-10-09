@@ -4,7 +4,8 @@ Markdown tickets with YAML front matter, one file per ticket.
 
 - Config: `.tickets/config.toml` (custom statuses; `done` and `rejected` are built in)
 - Tickets: `tickets/all/<id>.md`
-- IDs: 13 lowercase base36 characters (a random u64), always passed in full
+- IDs: 13 lowercase base36 characters (a random u64). Commands accept any unique prefix (an ambiguous one lists the matches); scripts should capture the full ID from `tickets new`.
+- Pretty output (`--format pretty`) shows full IDs with everything past the shortest unique prefix (min 3, active and archived tickets) in grey; plain output always prints full IDs
 - Timestamps: `created_at` and `updated_at` are RFC 3339 UTC with milliseconds, e.g. `2026-04-30T19:00:00.123Z`
 
 ## Commands

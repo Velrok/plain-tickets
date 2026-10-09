@@ -6,6 +6,7 @@
 //! used, so terminals agree on their width.
 
 const RESET: &str = "\x1b[0m";
+const GREY: &str = "\x1b[90m";
 
 /// Icons that lead the labelled lines of the detail view.
 pub const PARENT_ICON: &str = "📁";
@@ -20,13 +21,6 @@ pub struct Cell {
 }
 
 impl Cell {
-    pub fn plain(text: &str) -> Cell {
-        Cell {
-            shown: text.to_string(),
-            width: text.chars().count(),
-        }
-    }
-
     /// `shown` followed by spaces up to `width` columns.
     pub fn padded(&self, width: usize) -> String {
         format!(
@@ -133,6 +127,20 @@ impl Style {
         )
     }
 
+    /// A full ID with everything after its first `unique` characters dimmed.
+    pub fn id_cell(&self, id: &str, unique: usize) -> Cell {
+        let (needed, rest) = id.split_at(unique.min(id.len()));
+        let rest = if rest.is_empty() {
+            String::new()
+        } else {
+            self.paint(Some(GREY), rest)
+        };
+        Cell {
+            shown: format!("{needed}{rest}"),
+            width: id.chars().count(),
+        }
+    }
+
     fn paint(&self, code: Option<&str>, text: &str) -> String {
         match code {
             Some(code) if self.enabled => format!("{code}{text}{RESET}"),
@@ -172,6 +180,18 @@ mod tests {
             style.type_with_icon("bug"),
             format!("🐛 {}", style.r#type("bug"))
         );
+    }
+
+    #[test]
+    fn ids_dim_the_characters_after_the_unique_prefix_but_show_them_all() {
+        let cell = Style::new(true).id_cell("0xyz000000003", 3);
+        assert_eq!(cell.shown, "0xy\x1b[90mz000000003\x1b[0m");
+        assert_eq!(cell.width, 13);
+        let off = Style::new(false).id_cell("0xyz000000003", 3);
+        assert_eq!(off.shown, "0xyz000000003");
+        assert_eq!(off.width, 13);
+        let all_needed = Style::new(true).id_cell("0xyz000000003", 13);
+        assert_eq!(all_needed.shown, "0xyz000000003");
     }
 
     #[test]

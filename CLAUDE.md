@@ -37,7 +37,8 @@ First time only: `tickets init` creates `.tickets/config.toml`. Statuses are
 
 ## Rules
 
-- IDs are always the full 13 base36 characters (`0-9a-z`).
+- Commands accept any unique prefix of an ID, but scripts and notes should use the full 13
+  base36 characters (`0-9a-z`): a prefix can become ambiguous later.
 - **Whenever you mention a ticket ID to the user, include its title** (e.g.
   `16utbc9j3f6jp` List order is arbitrary…). Bare IDs are unreadable.
 - Commit `tickets/` together with the code change it tracks.

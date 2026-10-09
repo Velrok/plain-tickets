@@ -2,14 +2,14 @@
 id: 00w41rwtv8j6o
 title: Show shortest unique ID prefixes in pretty output and accept prefixes as input
 type: feature
-status: todo
+status: done
 parent: null
 blocked_by:
 - 00w41rdqtrtc4
 tags:
 - id
 created_at: 2026-10-09T01:19:23.000Z
-updated_at: 2026-10-09T01:19:23.000Z
+updated_at: 2026-10-09T01:48:08.878Z
 ---
 
 ## Problem
@@ -28,3 +28,5 @@ Base36 u64 IDs are 13 characters long. jj shows the shortest unique prefix and a
 - Update `CLAUDE.md`, `README.md` and the `tickets-cli-expert` skill, which say IDs are always passed in full.
 
 A prefix printed earlier can become ambiguous later. Scripts should capture the full ID from `tickets new`.
+
+Done. IdPrefix (1-13 chars) in args; store::resolve scans file names of active + archived tickets (full IDs pass through, so existing 'no ticket'/'is archived' errors are unchanged); ambiguous lists ids+titles. Per your steer, pretty output shows FULL ids with the part beyond the shortest unique prefix (min 3, over all active+archived ids) in grey (\x1b[90m); NO_COLOR keeps all chars uncoloured; plain unchanged. Updated README + CLAUDE.md. NOT updated: ~/.claude/skills/tickets-cli-expert, which still documents the old 6-char implementation as a whole.

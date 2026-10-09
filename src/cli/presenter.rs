@@ -1,5 +1,5 @@
 use super::style::{BLOCKED_ICON, Cell, DATES_ICON, PARENT_ICON, Style};
-use crate::domain::id::ID;
+use crate::domain::id::{ID, IdAbbrev};
 use crate::domain::tickets::Ticket;
 use std::fmt;
 
@@ -23,6 +23,7 @@ impl fmt::Display for PlainLinePresenter<'_> {
 /// An aligned table with a header row, for people. Empty for no tickets.
 pub struct PrettyListPresenter<'a> {
     pub tickets: &'a [Ticket],
+    pub ids: &'a IdAbbrev,
     pub colour: bool,
     /// Terminal width; titles are cut to fit. `None` leaves them whole.
     pub width: Option<usize>,
@@ -48,7 +49,7 @@ impl fmt::Display for PrettyListPresenter<'_> {
             .iter()
             .map(|t| {
                 [
-                    Cell::plain(&t.id.to_string()),
+                    style.id_cell(&t.id.to_string(), self.ids.unique_len(t.id)),
                     style.status_cell(&t.status.to_string()),
                     style.type_cell(t.r#type.as_deref().unwrap_or("")),
                 ]
@@ -100,22 +101,28 @@ pub struct Relation {
 /// A readable header block (title, ids, relations, dates), then the raw body.
 pub struct PrettyDetailPresenter<'a> {
     pub ticket: &'a Ticket,
+    pub ids: &'a IdAbbrev,
     pub parent: Option<Relation>,
     pub blockers: Vec<Relation>,
     pub colour: bool,
 }
 
 /// `<id> <title> [<status>]`, or just the id when the ticket is gone.
-fn describe(relation: &Relation, style: &Style) -> String {
+fn describe(relation: &Relation, style: &Style, ids: &IdAbbrev) -> String {
     match &relation.ticket {
         Some(t) => format!(
             "{} {} [{}]",
-            relation.id,
+            show_id(relation.id, style, ids),
             t.title,
             style.status_with_icon(&t.status.to_string())
         ),
-        None => format!("{} (not found)", relation.id),
+        None => format!("{} (not found)", show_id(relation.id, style, ids)),
     }
+}
+
+/// The full ID, with the characters beyond its shortest unique prefix greyed out.
+fn show_id(id: ID, style: &Style, ids: &IdAbbrev) -> String {
+    style.id_cell(&id.to_string(), ids.unique_len(id)).shown
 }
 
 impl fmt::Display for PrettyDetailPresenter<'_> {
@@ -123,7 +130,7 @@ impl fmt::Display for PrettyDetailPresenter<'_> {
         let t = self.ticket;
         let style = Style::new(self.colour);
         writeln!(f, "{}", style.bold(&t.title.to_string()))?;
-        let mut meta = vec![t.id.to_string()];
+        let mut meta = vec![show_id(t.id, &style, self.ids)];
         meta.extend(t.r#type.as_deref().map(|ty| style.type_with_icon(ty)));
         let status = t.status.to_string();
         meta.push(style.status_with_icon(&status));
@@ -133,7 +140,11 @@ impl fmt::Display for PrettyDetailPresenter<'_> {
         }
         writeln!(f, "{}", meta.join(" · "))?;
         if let Some(parent) = &self.parent {
-            writeln!(f, "{PARENT_ICON} Parent: {}", describe(parent, &style))?;
+            writeln!(
+                f,
+                "{PARENT_ICON} Parent: {}",
+                describe(parent, &style, self.ids)
+            )?;
         }
         for (i, blocker) in self.blockers.iter().enumerate() {
             let label = if i == 0 {
@@ -141,7 +152,7 @@ impl fmt::Display for PrettyDetailPresenter<'_> {
             } else {
                 " ".repeat(14)
             };
-            writeln!(f, "{label} {}", describe(blocker, &style))?;
+            writeln!(f, "{label} {}", describe(blocker, &style, self.ids))?;
         }
         write!(
             f,
@@ -172,7 +183,7 @@ impl fmt::Display for PlainDetailPresenter<'_> {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::domain::id::ID;
+    use crate::domain::id::{ID, IdAbbrev};
     use crate::domain::tickets::NewTicket;
 
     fn ticket(id: u64, status: &str, r#type: Option<&str>, title: &str) -> Ticket {
@@ -223,6 +234,7 @@ mod tests {
 
     fn detail(ticket: &Ticket) -> String {
         PrettyDetailPresenter {
+            ids: &IdAbbrev::full(),
             ticket,
             parent: None,
             blockers: vec![],
@@ -258,6 +270,7 @@ mod tests {
         let epic = self::ticket(1, "in progress", None, "The epic");
         let first = self::ticket(2, "done", None, "First");
         let shown = PrettyDetailPresenter {
+            ids: &IdAbbrev::full(),
             ticket: &ticket,
             parent: Some(Relation {
                 id: ID(1),
@@ -307,6 +320,7 @@ mod tests {
         let done = self::ticket(1, "done", None, "Epic");
         let render = |colour| {
             PrettyDetailPresenter {
+                ids: &IdAbbrev::full(),
                 ticket: &ticket,
                 parent: Some(Relation {
                     id: ID(1),
@@ -334,6 +348,7 @@ mod tests {
             ticket(3, "done", None, "C"),
         ];
         let table = PrettyListPresenter {
+            ids: &IdAbbrev::full(),
             tickets: &tickets,
             colour: false,
             width: None,
@@ -371,6 +386,7 @@ mod tests {
             ticket(2, "todo", Some("misc"), "B"),
         ];
         let table = PrettyListPresenter {
+            ids: &IdAbbrev::full(),
             tickets: &tickets,
             colour: false,
             width: None,
@@ -386,6 +402,7 @@ mod tests {
         let tickets = [ticket(1, "todo", Some("bug"), "A")];
         let render = |colour| {
             PrettyListPresenter {
+                ids: &IdAbbrev::full(),
                 tickets: &tickets,
                 colour,
                 width: None,
@@ -409,6 +426,7 @@ mod tests {
             ticket(2, "todo", None, "Short"),
         ];
         let table = PrettyListPresenter {
+            ids: &IdAbbrev::full(),
             tickets: &tickets,
             colour: false,
             width: Some(40),
@@ -428,6 +446,7 @@ mod tests {
     fn does_not_truncate_without_a_known_width() {
         let tickets = [ticket(1, "todo", None, "A very long title that cannot fit")];
         let table = PrettyListPresenter {
+            ids: &IdAbbrev::full(),
             tickets: &tickets,
             colour: false,
             width: None,
@@ -444,12 +463,14 @@ mod tests {
             ticket(3, "in progress", Some("task"), "C"),
         ];
         let plain = PrettyListPresenter {
+            ids: &IdAbbrev::full(),
             tickets: &tickets,
             colour: false,
             width: None,
         }
         .to_string();
         let coloured = PrettyListPresenter {
+            ids: &IdAbbrev::full(),
             tickets: &tickets,
             colour: true,
             width: None,

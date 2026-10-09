@@ -4,7 +4,7 @@ use super::presenter::{
     PlainDetailPresenter, PlainLinePresenter, PrettyDetailPresenter, PrettyListPresenter, Relation,
 };
 use crate::config::Config;
-use crate::domain::id::ID;
+use crate::domain::id::{ID, IdAbbrev, IdPrefix};
 use crate::domain::query::Filter;
 use crate::domain::status::Status;
 use crate::domain::store;
@@ -27,6 +27,8 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
         } => {
             let stdin = std::io::stdin();
             let body = resolve_body(message, stdin.lock(), stdin.is_terminal())?;
+            let parent = resolve_opt(root, parent)?;
+            let blocked_by = resolve_all(root, blocked_by)?;
             let draft = NewTicket {
                 title,
                 r#type,
@@ -50,6 +52,7 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             archived,
             format,
         } => {
+            let parent = resolve_opt(root, parent)?;
             let mode = output::current(format);
             let filter = Filter {
                 status,
@@ -74,6 +77,7 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
                 Format::Pretty => {
                     let table = PrettyListPresenter {
                         tickets: &selected,
+                        ids: &IdAbbrev::new(&store::all_ids(root)),
                         colour: mode.colour,
                         width: terminal_size::terminal_size().map(|(w, _)| w.0 as usize),
                     }
@@ -85,12 +89,36 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             }
             Ok(())
         }
-        Command::Edit { id } => edit(root, config, id),
-        Command::Tag { id, tags } => modify(root, config, id, Change::AddTags(tags)),
-        Command::Untag { id, tags } => modify(root, config, id, Change::RemoveTags(tags)),
-        Command::Block { id, blockers } => modify(root, config, id, Change::AddBlockers(blockers)),
+        Command::Edit { id } => edit(root, config, store::resolve(root, &id)?),
+        Command::Tag { id, tags } => modify(
+            root,
+            config,
+            store::resolve(root, &id)?,
+            Change::AddTags(tags),
+        ),
+        Command::Untag { id, tags } => modify(
+            root,
+            config,
+            store::resolve(root, &id)?,
+            Change::RemoveTags(tags),
+        ),
+        Command::Block { id, blockers } => {
+            let blockers = resolve_all(root, blockers)?;
+            modify(
+                root,
+                config,
+                store::resolve(root, &id)?,
+                Change::AddBlockers(blockers),
+            )
+        }
         Command::Unblock { id, blockers } => {
-            modify(root, config, id, Change::RemoveBlockers(blockers))
+            let blockers = resolve_all(root, blockers)?;
+            modify(
+                root,
+                config,
+                store::resolve(root, &id)?,
+                Change::RemoveBlockers(blockers),
+            )
         }
         Command::Set {
             id,
@@ -101,6 +129,8 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
             parent,
             clear_parent,
         } => {
+            let id = store::resolve(root, &id)?;
+            let parent = resolve_opt(root, parent)?;
             let fields = SetFields {
                 title,
                 status,
@@ -122,7 +152,7 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
         }
         Command::Show { id, format } => {
             let mode = output::current(format);
-            let ticket = store::find(root, id)?;
+            let ticket = store::find(root, store::resolve(root, &id)?)?;
             match mode.format {
                 Format::Plain => println!("{}", PlainDetailPresenter(&ticket)),
                 Format::Pretty => {
@@ -134,6 +164,7 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
                     println!(
                         "{}",
                         PrettyDetailPresenter {
+                            ids: &IdAbbrev::new(&store::all_ids(root)),
                             parent: ticket.parent.map(relation),
                             blockers: ticket.blocked_by.iter().copied().map(relation).collect(),
                             ticket: &ticket,
@@ -152,14 +183,27 @@ pub fn run(command: Command, root: &Path, config: &Config) -> Result<(), String>
                     .map(|t| t.id)
                     .collect()
             } else {
-                ids
+                resolve_all(root, ids)?
             };
             archive(root, ids)
         }
-        Command::Unarchive { id } => store::unarchive(root, id),
-        Command::Note { id, text } => modify(root, config, id, Change::AppendNote(text)),
+        Command::Unarchive { id } => store::unarchive(root, store::resolve(root, &id)?),
+        Command::Note { id, text } => modify(
+            root,
+            config,
+            store::resolve(root, &id)?,
+            Change::AppendNote(text),
+        ),
         Command::Init => unreachable!("main handles init before loading the config"),
     }
+}
+
+fn resolve_all(root: &Path, prefixes: Vec<IdPrefix>) -> Result<Vec<ID>, String> {
+    prefixes.iter().map(|p| store::resolve(root, p)).collect()
+}
+
+fn resolve_opt(root: &Path, prefix: Option<IdPrefix>) -> Result<Option<ID>, String> {
+    prefix.map(|p| store::resolve(root, &p)).transpose()
 }
 
 fn ensure_exist<'a>(root: &Path, ids: impl Iterator<Item = &'a ID>) -> Result<(), String> {

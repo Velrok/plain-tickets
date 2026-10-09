@@ -1,4 +1,4 @@
-use crate::domain::id::ID;
+use crate::domain::id::IdPrefix;
 use crate::domain::status::Status;
 use clap::{Parser, Subcommand, ValueEnum};
 
@@ -35,16 +35,16 @@ pub enum Command {
         #[arg(short = 'g', long = "tag")]
         tags: Vec<String>,
         #[arg(short, long)]
-        parent: Option<ID>,
+        parent: Option<IdPrefix>,
         #[arg(short, long = "blocked-by")]
-        blocked_by: Vec<ID>,
+        blocked_by: Vec<IdPrefix>,
         /// Body text; `-` reads it from STDIN; opens $EDITOR if omitted on a terminal
         #[arg(short, long)]
         message: Option<String>,
     },
     /// Print a ticket's front matter and body
     Show {
-        id: ID,
+        id: IdPrefix,
         /// Defaults to pretty on a terminal, plain otherwise
         #[arg(long)]
         format: Option<Format>,
@@ -60,7 +60,7 @@ pub enum Command {
         /// Repeatable; matches any
         tag: Vec<String>,
         #[arg(short, long)]
-        parent: Option<ID>,
+        parent: Option<IdPrefix>,
         /// Only tickets with unfinished blockers
         #[arg(long, conflicts_with = "ready")]
         blocked: bool,
@@ -75,10 +75,10 @@ pub enum Command {
         format: Option<Format>,
     },
     /// Open a ticket in $EDITOR
-    Edit { id: ID },
+    Edit { id: IdPrefix },
     /// Set scalar fields
     Set {
-        id: ID,
+        id: IdPrefix,
         #[arg(long)]
         title: Option<String>,
         #[arg(long)]
@@ -88,49 +88,49 @@ pub enum Command {
         #[arg(long, conflicts_with = "type")]
         clear_type: bool,
         #[arg(long)]
-        parent: Option<ID>,
+        parent: Option<IdPrefix>,
         #[arg(long, conflicts_with = "parent")]
         clear_parent: bool,
     },
     /// Add tags
     Tag {
-        id: ID,
+        id: IdPrefix,
         #[arg(required = true)]
         tags: Vec<String>,
     },
     /// Remove tags
     Untag {
-        id: ID,
+        id: IdPrefix,
         #[arg(required = true)]
         tags: Vec<String>,
     },
     /// Add blockers
     Block {
-        id: ID,
+        id: IdPrefix,
         #[arg(required = true)]
-        blockers: Vec<ID>,
+        blockers: Vec<IdPrefix>,
     },
     /// Remove blockers
     Unblock {
-        id: ID,
+        id: IdPrefix,
         #[arg(required = true)]
-        blockers: Vec<ID>,
+        blockers: Vec<IdPrefix>,
     },
     /// Append text to the body
     #[command(
         after_help = "Text starting with dashes goes after --:\n  tickets note <ID> -- \"--text\""
     )]
-    Note { id: ID, text: String },
+    Note { id: IdPrefix, text: String },
     /// Archive done or rejected tickets (reversible)
     Archive {
         #[arg(required_unless_present = "all_rejected")]
-        ids: Vec<ID>,
+        ids: Vec<IdPrefix>,
         /// Archive every rejected active ticket instead of naming IDs
         #[arg(long, conflicts_with = "ids")]
         all_rejected: bool,
     },
     /// Restore an archived ticket
-    Unarchive { id: ID },
+    Unarchive { id: IdPrefix },
 }
 
 #[cfg(test)]

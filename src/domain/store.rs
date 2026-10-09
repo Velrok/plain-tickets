@@ -1,4 +1,4 @@
-use super::id::ID;
+use super::id::{ID, IdPrefix};
 use super::tickets::Ticket;
 use std::path::{Path, PathBuf};
 
@@ -42,6 +42,54 @@ pub fn find(root: &Path, id: ID) -> Result<Ticket, String> {
         return Ok(ticket);
     }
     read_file(&archived_path(root, id))?.ok_or_else(|| not_found(root, id))
+}
+
+/// The IDs of all active and archived tickets, sorted, taken from the file names alone.
+pub fn all_ids(root: &Path) -> Vec<ID> {
+    let mut ids: Vec<ID> = ["tickets/all", "tickets/archived"]
+        .iter()
+        .filter_map(|dir| std::fs::read_dir(root.join(dir)).ok())
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            if path.extension()? != "md" {
+                return None;
+            }
+            path.file_stem()?.to_str()?.parse().ok()
+        })
+        .collect();
+    ids.sort();
+    ids
+}
+
+/// The ID of the active or archived ticket that `prefix` names. A full ID is returned as is, so
+/// the usual "no ticket" / "is archived" errors come from the command using it.
+pub fn resolve(root: &Path, prefix: &IdPrefix) -> Result<ID, String> {
+    if let Some(id) = prefix.full() {
+        return Ok(id);
+    }
+    let matches: Vec<ID> = all_ids(root)
+        .into_iter()
+        .filter(|id| prefix.matches(*id))
+        .collect();
+    match matches[..] {
+        [] => Err(format!("no ticket with ID prefix '{prefix}'")),
+        [id] => Ok(id),
+        _ => {
+            let lines: Vec<String> = matches
+                .iter()
+                .map(|id| match find(root, *id) {
+                    Ok(t) => format!("  {id}  {}", t.title),
+                    Err(_) => format!("  {id}"),
+                })
+                .collect();
+            Err(format!(
+                "ID prefix '{prefix}' matches {} tickets:\n{}",
+                matches.len(),
+                lines.join("\n")
+            ))
+        }
+    }
 }
 
 fn read_file(path: &Path) -> Result<Option<Ticket>, String> {
