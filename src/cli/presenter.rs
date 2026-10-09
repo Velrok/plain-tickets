@@ -1,4 +1,4 @@
-use super::style::Style;
+use super::style::{BLOCKED_ICON, DATES_ICON, PARENT_ICON, Style};
 use crate::domain::id::ID;
 use crate::domain::tickets::Ticket;
 use std::fmt;
@@ -136,7 +136,7 @@ fn describe(relation: &Relation, style: &Style) -> String {
             "{} {} [{}]",
             relation.id,
             t.title,
-            style.status(&t.status.to_string())
+            style.status_with_icon(&t.status.to_string())
         ),
         None => format!("{} (not found)", relation.id),
     }
@@ -148,23 +148,28 @@ impl fmt::Display for PrettyDetailPresenter<'_> {
         let style = Style::new(self.colour);
         writeln!(f, "{}", style.bold(&t.title.to_string()))?;
         let mut meta = vec![t.id.to_string()];
-        meta.extend(t.r#type.as_deref().map(|ty| style.r#type(ty)));
-        meta.push(style.status(&t.status.to_string()));
+        meta.extend(t.r#type.as_deref().map(|ty| style.type_with_icon(ty)));
+        let status = t.status.to_string();
+        meta.push(style.status_with_icon(&status));
         if !t.tags.is_empty() {
             let tags: Vec<String> = t.tags.iter().map(|tag| format!("#{tag}")).collect();
             meta.push(tags.join(" "));
         }
         writeln!(f, "{}", meta.join(" · "))?;
         if let Some(parent) = &self.parent {
-            writeln!(f, "Parent: {}", describe(parent, &style))?;
+            writeln!(f, "{PARENT_ICON} Parent: {}", describe(parent, &style))?;
         }
         for (i, blocker) in self.blockers.iter().enumerate() {
-            let label = if i == 0 { "Blocked by:" } else { "           " };
+            let label = if i == 0 {
+                format!("{BLOCKED_ICON} Blocked by:")
+            } else {
+                " ".repeat(14)
+            };
             writeln!(f, "{label} {}", describe(blocker, &style))?;
         }
         write!(
             f,
-            "Created {} · Updated {}",
+            "{DATES_ICON} Created {} · Updated {}",
             date(t.created_at),
             date(t.updated_at)
         )?;
@@ -249,7 +254,7 @@ mod tests {
         let ticket = ticket(0xab, "todo", None, "Fix it");
         assert_eq!(
             detail(&ticket),
-            "Fix it\n00000000000000ab · todo\nCreated 1970-01-01 · Updated 1970-01-01"
+            "Fix it\n00000000000000ab · ⚪ todo\n📅 Created 1970-01-01 · Updated 1970-01-01"
         );
     }
 
@@ -261,7 +266,7 @@ mod tests {
         ticket.updated_at = 1_791_504_758 + 86_400;
         assert_eq!(
             detail(&ticket),
-            "Fix it\n00000000000000ab · bug · in progress · #cli #x\nCreated 2026-10-09 · Updated 2026-10-10"
+            "Fix it\n00000000000000ab · 🐛 bug · 🟡 in progress · #cli #x\n📅 Created 2026-10-09 · Updated 2026-10-10"
         );
     }
 
@@ -292,11 +297,11 @@ mod tests {
         assert_eq!(
             shown,
             "Fix it\n\
-             00000000000000ab · todo\n\
-             Parent: 0000000000000001 The epic [in progress]\n\
-             Blocked by: 0000000000000002 First [done]\n\
-             \x20           0000000000000003 (not found)\n\
-             Created 1970-01-01 · Updated 1970-01-01"
+             00000000000000ab · ⚪ todo\n\
+             📁 Parent: 0000000000000001 The epic [🟡 in progress]\n\
+             ⛔ Blocked by: 0000000000000002 First [✅ done]\n\
+             \x20              0000000000000003 (not found)\n\
+             📅 Created 1970-01-01 · Updated 1970-01-01"
         );
     }
 
@@ -307,7 +312,7 @@ mod tests {
         assert_eq!(
             detail(&ticket),
             format!(
-                "Fix it\n00000000000000ab · todo\nCreated 1970-01-01 · Updated 1970-01-01\n{}\n# Heading\n\nSome *body*",
+                "Fix it\n00000000000000ab · ⚪ todo\n📅 Created 1970-01-01 · Updated 1970-01-01\n{}\n# Heading\n\nSome *body*",
                 "─".repeat(40)
             )
         );
@@ -336,7 +341,7 @@ mod tests {
         assert!(coloured.starts_with(&style.bold("Fix it")));
         assert!(coloured.contains(&style.r#type("bug")));
         assert_eq!(coloured.matches(&style.status("in progress")).count(), 1);
-        assert!(coloured.contains(&format!("[{}]", style.status("done"))));
+        assert!(coloured.contains(&format!("[{}]", style.status_with_icon("done"))));
     }
 
     #[test]

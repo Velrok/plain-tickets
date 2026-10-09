@@ -99,11 +99,14 @@ fn pretty_show_resolves_the_parent_and_blockers() {
     let text = stdout(&out);
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines[0], "Fix it");
-    assert_eq!(lines[1], format!("{id} · bug · todo · #cli"));
-    assert_eq!(lines[2], format!("Parent: {parent} The epic [in progress]"));
+    assert_eq!(lines[1], format!("{id} · 🐛 bug · ⚪ todo · #cli"));
+    assert_eq!(
+        lines[2],
+        format!("📁 Parent: {parent} The epic [🟡 in progress]")
+    );
     assert_eq!(
         lines[3],
-        format!("Blocked by: {blocker} Finished first [done]")
+        format!("⛔ Blocked by: {blocker} Finished first [✅ done]")
     );
     assert_eq!(lines.last(), Some(&"Some body"));
 }
