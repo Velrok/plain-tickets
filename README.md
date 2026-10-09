@@ -5,6 +5,7 @@ Markdown tickets with YAML front matter, one file per ticket.
 - Config: `.tickets/config.toml` (custom statuses; `done` and `rejected` are built in)
 - Tickets: `tickets/all/<id>.md`
 - IDs: 16 hex digits, always passed in full
+- Timestamps: `created_at` and `updated_at` are RFC 3339 UTC with milliseconds, e.g. `2026-04-30T19:00:00.123Z`
 
 ## Commands
 

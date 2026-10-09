@@ -82,3 +82,18 @@ fn note_help_explains_how_to_pass_text_starting_with_dashes() {
     let help = stdout(&tickets(&dir, &["note", "--help"]));
     assert!(help.contains("tickets note <ID> -- "), "{help}");
 }
+
+#[test]
+fn new_stamps_created_and_updated_as_iso_8601_with_milliseconds() {
+    let dir = initialised("iso-stamps");
+    let id = new_id(&dir, &["Fix it"]);
+    let text = ticket_text(&dir, &id);
+    let iso = |name: &str| {
+        let line = text.lines().find(|l| l.starts_with(name)).unwrap();
+        let value = line.split_once(": ").unwrap().1;
+        let b = value.as_bytes();
+        value.len() == 24 && b[4] == b'-' && b[10] == b'T' && b[19] == b'.' && value.ends_with('Z')
+    };
+    assert!(iso("created_at"), "{text}");
+    assert!(iso("updated_at"), "{text}");
+}

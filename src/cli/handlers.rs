@@ -8,6 +8,7 @@ use crate::domain::id::ID;
 use crate::domain::query::Filter;
 use crate::domain::store;
 use crate::domain::tickets::{Change, NewTicket, SetFields, Ticket};
+use crate::domain::timestamp::Timestamp;
 use std::path::Path;
 
 /// Runs every command except `init`, which needs no existing config.
@@ -153,12 +154,6 @@ fn ensure_exist<'a>(root: &Path, ids: impl Iterator<Item = &'a ID>) -> Result<()
     Ok(())
 }
 
-fn now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs())
-}
-
 /// Applies `change` to the ticket and saves it, if it changed anything.
 fn modify(root: &Path, config: &Config, id: ID, change: Change) -> Result<(), String> {
     let ticket = store::require(root, id)?;
@@ -172,7 +167,7 @@ fn save_revision(
     ticket: &Ticket,
     edited: Ticket,
 ) -> Result<(), String> {
-    match ticket.revise(edited, config, now())? {
+    match ticket.revise(edited, config, Timestamp::now())? {
         Some(revised) => {
             ensure_exist(root, revised.parent.iter().chain(&revised.blocked_by))?;
             store::replace(root, &revised)
@@ -225,7 +220,7 @@ fn edit(root: &Path, config: &Config, id: ID) -> Result<(), String> {
 /// Creates a ticket under `root` and returns its ID.
 fn new(root: &Path, config: &Config, draft: NewTicket) -> Result<ID, String> {
     ensure_exist(root, draft.parent.iter().chain(&draft.blocked_by))?;
-    let ticket = Ticket::new(draft, config, ID::generate(), now())?;
+    let ticket = Ticket::new(draft, config, ID::generate(), Timestamp::now())?;
     store::create(root, &ticket)?;
     Ok(ticket.id)
 }

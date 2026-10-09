@@ -158,7 +158,13 @@ mod tests {
             blocked_by: vec![],
             body: "Body\n".into(),
         };
-        Ticket::new(draft, &Config::default(), ID(id), 1).unwrap()
+        Ticket::new(
+            draft,
+            &Config::default(),
+            ID(id),
+            "1970-01-01T00:00:01Z".parse().unwrap(),
+        )
+        .unwrap()
     }
 
     #[test]

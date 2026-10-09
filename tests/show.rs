@@ -110,3 +110,25 @@ fn pretty_show_resolves_the_parent_and_blockers() {
     );
     assert_eq!(lines.last(), Some(&"Some body"));
 }
+
+#[test]
+fn show_rejects_old_epoch_second_timestamps_naming_the_file() {
+    let dir = initialised("show-epoch");
+    let id = new_id(&dir, &["Fix it"]);
+    let path = dir.join(format!("tickets/all/{id}.md"));
+    let text = std::fs::read_to_string(&path).unwrap();
+    let old = text
+        .lines()
+        .find(|l| l.starts_with("created_at: "))
+        .unwrap()
+        .to_string();
+    std::fs::write(&path, text.replace(&old, "created_at: 1791504758")).unwrap();
+    let out = tickets(&dir, &["show", &id]);
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    assert!(
+        err.contains("RFC 3339") && err.contains("1791504758"),
+        "{err}"
+    );
+    assert!(err.contains(&format!("{id}.md")), "{err}");
+}

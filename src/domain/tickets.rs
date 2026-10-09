@@ -1,5 +1,6 @@
 use super::id::ID;
 use super::status::Status;
+use super::timestamp::Timestamp;
 use crate::config::Config;
 use serde::{Deserialize, Serialize};
 
@@ -21,8 +22,8 @@ pub struct Ticket {
     pub blocked_by: Vec<ID>,
 
     pub tags: Vec<Tag>,
-    pub created_at: u64,
-    pub updated_at: u64,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
 
     #[serde(skip)]
     pub body: String,
@@ -128,7 +129,7 @@ impl Ticket {
         &self,
         mut edited: Ticket,
         config: &Config,
-        now: u64,
+        now: Timestamp,
     ) -> Result<Option<Ticket>, String> {
         if edited.id != self.id {
             return Err("id cannot be changed".to_string());
@@ -161,7 +162,12 @@ impl Ticket {
         Ok(Some(edited))
     }
 
-    pub fn new(draft: NewTicket, config: &Config, id: ID, now: u64) -> Result<Ticket, String> {
+    pub fn new(
+        draft: NewTicket,
+        config: &Config,
+        id: ID,
+        now: Timestamp,
+    ) -> Result<Ticket, String> {
         let title = clean_title(&draft.title)?;
         let status = draft
             .status
@@ -227,9 +233,28 @@ mod tests {
             blocked_by: vec![ID(1), ID(2)],
             body: body.into(),
             tags: vec!["a".into()],
-            created_at: 1,
-            updated_at: 2,
+            created_at: ts("2026-04-30T19:00:00.123Z"),
+            updated_at: ts("2026-05-01T08:30:00.000Z"),
         }
+    }
+
+    fn ts(text: &str) -> Timestamp {
+        text.parse().unwrap()
+    }
+
+    #[test]
+    fn stores_timestamps_as_iso_8601_strings() {
+        let text = ticket("").to_string();
+        assert!(
+            text.contains("created_at: 2026-04-30T19:00:00.123Z"),
+            "{text}"
+        );
+        assert!(
+            text.contains("updated_at: 2026-05-01T08:30:00.000Z"),
+            "{text}"
+        );
+        let parsed: Ticket = text.parse().unwrap();
+        assert_eq!(parsed.created_at, ts("2026-04-30T19:00:00.123Z"));
     }
 
     #[test]
@@ -293,9 +318,16 @@ mod tests {
     #[test]
     fn new_ticket_gets_the_configs_default_status_and_timestamps() {
         let config: Config = r#"statuses = ["backlog", "todo"]"#.parse().unwrap();
-        let t = Ticket::new(draft("Fix it"), &config, ID(5), 42).unwrap();
+        let t = Ticket::new(
+            draft("Fix it"),
+            &config,
+            ID(5),
+            ts("2026-04-30T19:00:00.123Z"),
+        )
+        .unwrap();
         assert_eq!(t.status, Status::Custom("backlog".into()));
-        assert_eq!((t.id, t.created_at, t.updated_at), (ID(5), 42, 42));
+        let now = ts("2026-04-30T19:00:00.123Z");
+        assert_eq!((t.id, t.created_at, t.updated_at), (ID(5), now, now));
     }
 
     #[test]
@@ -304,7 +336,7 @@ mod tests {
         for status in [Status::Done, Status::Custom("in progress".into())] {
             let mut d = draft("x");
             d.status = Some(status.clone());
-            let t = Ticket::new(d, &config, ID(1), 0).unwrap();
+            let t = Ticket::new(d, &config, ID(1), ts("2026-04-30T19:00:00.000Z")).unwrap();
             assert_eq!(t.status, status);
         }
     }
@@ -313,7 +345,8 @@ mod tests {
     fn new_ticket_rejects_a_status_the_config_does_not_list() {
         let mut d = draft("x");
         d.status = Some(Status::Custom("blocked".into()));
-        let err = Ticket::new(d, &Config::default(), ID(1), 0).unwrap_err();
+        let err =
+            Ticket::new(d, &Config::default(), ID(1), ts("2026-04-30T19:00:00.000Z")).unwrap_err();
         assert!(err.contains("blocked"), "{err}");
     }
 
@@ -321,14 +354,19 @@ mod tests {
     fn new_ticket_drops_duplicate_tags_keeping_first_order() {
         let mut d = draft("x");
         d.tags = vec!["b".into(), "a".into(), "b".into()];
-        let t = Ticket::new(d, &Config::default(), ID(1), 0).unwrap();
+        let t = Ticket::new(d, &Config::default(), ID(1), ts("2026-04-30T19:00:00.000Z")).unwrap();
         assert_eq!(t.tags, ["b", "a"]);
     }
 
     #[test]
     fn new_ticket_rejects_blank_or_multiline_titles() {
         for title in ["", "   ", "a\nb"] {
-            let r = Ticket::new(draft(title), &Config::default(), ID(1), 0);
+            let r = Ticket::new(
+                draft(title),
+                &Config::default(),
+                ID(1),
+                ts("2026-04-30T19:00:00.000Z"),
+            );
             assert!(r.is_err(), "{title:?}");
         }
     }

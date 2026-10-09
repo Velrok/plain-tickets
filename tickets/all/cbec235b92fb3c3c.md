@@ -7,8 +7,8 @@ parent: null
 blocked_by: []
 tags:
 - cli
-created_at: 1791506598
-updated_at: 1791506642
+created_at: 2026-10-09T00:43:18.000Z
+updated_at: 2026-10-09T00:44:02.000Z
 ---
 
 Design A from the chat. Status icons: todo white circle, in progress yellow circle, done tick, rejected cross. Type icons: bug, feature, task. Line icons: folder for Parent, no-entry for Blocked by, calendar for dates. Single-codepoint emoji only (no variation selectors) so widths stay predictable. Icons are independent of NO_COLOR. Shared with Style so any future presenter can reuse them. Plain output unchanged.

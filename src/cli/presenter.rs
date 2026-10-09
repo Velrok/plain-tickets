@@ -105,21 +105,6 @@ pub struct PrettyDetailPresenter<'a> {
     pub colour: bool,
 }
 
-/// `YYYY-MM-DD` (UTC) for seconds since the Unix epoch.
-fn date(secs: u64) -> String {
-    // Days to civil date, after Howard Hinnant's algorithm.
-    let z = (secs / 86_400) as i64 + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    format!("{year:04}-{month:02}-{day:02}")
-}
-
 /// `<id> <title> [<status>]`, or just the id when the ticket is gone.
 fn describe(relation: &Relation, style: &Style) -> String {
     match &relation.ticket {
@@ -161,8 +146,8 @@ impl fmt::Display for PrettyDetailPresenter<'_> {
         write!(
             f,
             "{DATES_ICON} Created {} · Updated {}",
-            date(t.created_at),
-            date(t.updated_at)
+            t.created_at.date(),
+            t.updated_at.date()
         )?;
         let body = t.body.trim_end();
         if !body.is_empty() {
@@ -201,7 +186,13 @@ mod tests {
             body: String::new(),
         };
         let config: Config = r#"statuses = ["todo", "in progress"]"#.parse().unwrap();
-        Ticket::new(draft, &config, ID(id), 0).unwrap()
+        Ticket::new(
+            draft,
+            &config,
+            ID(id),
+            "1970-01-01T00:00:00Z".parse().unwrap(),
+        )
+        .unwrap()
     }
 
     #[test]
@@ -253,8 +244,8 @@ mod tests {
     fn shows_type_and_tags_in_the_meta_line_and_real_dates() {
         let mut ticket = ticket(0xab, "in progress", Some("bug"), "Fix it");
         ticket.tags = vec!["cli".into(), "x".into()];
-        ticket.created_at = 1_791_504_758;
-        ticket.updated_at = 1_791_504_758 + 86_400;
+        ticket.created_at = "2026-10-09T10:12:38Z".parse().unwrap();
+        ticket.updated_at = "2026-10-10T10:12:38Z".parse().unwrap();
         assert_eq!(
             detail(&ticket),
             "Fix it\n00000000000000ab · 🐛 bug · 🟡 in progress · #cli #x\n📅 Created 2026-10-09 · Updated 2026-10-10"
@@ -333,12 +324,6 @@ mod tests {
         assert!(coloured.contains(&style.r#type("bug")));
         assert_eq!(coloured.matches(&style.status("in progress")).count(), 1);
         assert!(coloured.contains(&format!("[{}]", style.status_with_icon("done"))));
-    }
-
-    #[test]
-    fn dates_handle_leap_days() {
-        assert_eq!(date(1_709_164_800), "2024-02-29");
-        assert_eq!(date(1_709_251_200), "2024-03-01");
     }
 
     #[test]

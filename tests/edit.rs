@@ -25,14 +25,18 @@ fn edit_stamps_updated_at_itself_and_keeps_created_at() {
     let id = new_id(&dir, &["Old title"]);
     let before = ticket_text(&dir, &id);
     let editor = format!(
-        "{}\nsed 's/^updated_at: .*/updated_at: 0/' \"$1\" > \"$1.new\" && mv \"$1.new\" \"$1\"",
+        "{}\nsed 's/^updated_at: .*/updated_at: 1970-01-01T00:00:00.000Z/' \"$1\" > \"$1.new\" && mv \"$1.new\" \"$1\"",
         set_title("New title")
     );
     let out = tickets_editing(&dir, &["edit", &id], &editor);
     assert!(out.status.success(), "{}", stderr(&out));
     let after = ticket_text(&dir, &id);
     assert_eq!(field(&after, "created_at"), field(&before, "created_at"));
-    assert_ne!(field(&after, "updated_at"), "0", "{after}");
+    assert_ne!(
+        field(&after, "updated_at"),
+        "1970-01-01T00:00:00.000Z",
+        "{after}"
+    );
 }
 
 #[test]
@@ -45,7 +49,7 @@ fn edit_without_changes_leaves_the_file_untouched() {
             "updated_at: {}",
             field(&ticket_text(&dir, &id), "updated_at")
         ),
-        "updated_at: 5",
+        "updated_at: 1970-01-01T00:00:05.000Z",
     );
     std::fs::write(&path, &aged).unwrap();
     let out = tickets_editing(&dir, &["edit", &id], "true");
@@ -71,7 +75,10 @@ fn edit_rejects_changes_to_id_and_created_at_and_keeps_the_original() {
     let dir = initialised("edit-immutable");
     let id = new_id(&dir, &["Keep me"]);
     let original = ticket_text(&dir, &id);
-    for (field, value) in [("id", "1234567890abcdef"), ("created_at", "7")] {
+    for (field, value) in [
+        ("id", "1234567890abcdef"),
+        ("created_at", "2000-01-01T00:00:00.000Z"),
+    ] {
         let editor = format!(
             "sed 's/^{field}: .*/{field}: {value}/' \"$1\" > \"$1.new\" && mv \"$1.new\" \"$1\""
         );

@@ -7,8 +7,8 @@ parent: null
 blocked_by: []
 tags:
 - ci
-created_at: 1791504687
-updated_at: 1791507406
+created_at: 2026-10-09T00:11:27.000Z
+updated_at: 2026-10-09T00:56:46.000Z
 ---
 
 release.yml triggers on v*.*.* tags but never compares the tag with version in Cargo.toml, so tickets --version can disagree with the release name.
