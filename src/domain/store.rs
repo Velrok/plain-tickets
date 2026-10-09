@@ -98,14 +98,22 @@ pub fn unarchive(root: &Path, id: ID) -> Result<(), String> {
     std::fs::rename(&from, &to).map_err(|e| format!("cannot move {}: {e}", from.display()))
 }
 
-/// Overwrites an existing ticket file. Errors if the ticket does not exist.
+/// Atomically overwrites an existing ticket file. Errors if the ticket does not exist.
 pub fn replace(root: &Path, ticket: &Ticket) -> Result<(), String> {
     let path = path(root, ticket.id);
     if !path.is_file() {
         return Err(not_found(root, ticket.id));
     }
-    std::fs::write(&path, ticket.to_string())
-        .map_err(|e| format!("cannot write {}: {e}", path.display()))
+    // Write next to the target and rename over it, so a crash never leaves a half-written ticket.
+    // The temp name does not end in `.md`, so listing ignores a leftover one.
+    let tmp = path.with_extension("tmp");
+    let written = std::fs::write(&tmp, ticket.to_string())
+        .and_then(|()| std::fs::File::open(&tmp)?.sync_all())
+        .and_then(|()| std::fs::rename(&tmp, &path));
+    written.map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("cannot write {}: {e}", path.display())
+    })
 }
 
 /// Every active ticket. A missing `tickets/all` directory means no tickets.
@@ -202,5 +210,40 @@ mod tests {
     fn read_returns_none_for_unknown_ids() {
         let root = scratch("unknown");
         assert!(read(&root, ID(9)).unwrap().is_none());
+    }
+
+    #[test]
+    fn replace_leaves_only_the_ticket_file_behind() {
+        let root = scratch("replace-clean");
+        create(&root, &ticket(1)).unwrap();
+        let mut changed = ticket(1);
+        changed.title = "Changed".into();
+        replace(&root, &changed).unwrap();
+        let files: Vec<_> = std::fs::read_dir(root.join("tickets/all"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        assert_eq!(files, [format!("{}.md", ID(1))]);
+        assert_eq!(
+            read(&root, ID(1)).unwrap().unwrap().to_string(),
+            changed.to_string()
+        );
+    }
+
+    #[test]
+    fn a_failed_replace_leaves_the_old_file_intact() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = scratch("replace-fails");
+        create(&root, &ticket(1)).unwrap();
+        let before = ticket(1).to_string();
+        let dir = root.join("tickets/all");
+        // A read-only directory stops a temp file being created next to the ticket.
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let mut changed = ticket(1);
+        changed.title = "Changed".into();
+        let result = replace(&root, &changed);
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(result.is_err());
+        assert_eq!(read(&root, ID(1)).unwrap().unwrap().to_string(), before);
     }
 }
